@@ -12,7 +12,7 @@ const mammoth = require('mammoth');
   // Configure CORS to allow multiple origins
   const corsOptions = {
     origin: (origin, callback) => {
-      const allowedOrigins = ['https://split-screen-backend.vercel.app/', 'http://localhost:5001'];
+      const allowedOrigins = ['https://split-screen-backend.vercel.app/', 'http://localhost:5001',process.env.REACT_APP_LOGIN_URL,];
       if (!origin || allowedOrigins.indexOf(origin) !== -1) {
         callback(null, true);
       } else {
