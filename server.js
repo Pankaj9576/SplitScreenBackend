@@ -2,6 +2,7 @@ const cors = require('cors');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const fetch = require('node-fetch');
+const cheerio = require('cheerio'); // For HTML parsing
 
 // CORS middleware
 const corsMiddleware = cors({
@@ -97,18 +98,67 @@ module.exports = (req, res) => {
         res.setHeader('Content-Disposition', 'inline');
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        // Proxy the full response for Google Patents
+        // Handle Google Patents link
         if (url.includes('patents.google.com')) {
-          const headers = {};
-          response.headers.forEach((value, key) => {
-            headers[key] = value;
-          });
-          Object.keys(headers).forEach((key) => {
-            res.setHeader(key, headers[key]);
-          });
+          const html = await response.text();
+          const $ = cheerio.load(html);
+          const pdfUrl = $('a[href*="/download/pdf"]').attr('href');
+          if (pdfUrl) {
+            const fullPdfUrl = `https://patents.google.com${pdfUrl}`;
+            const pdfResponse = await fetch(fullPdfUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+              },
+            });
+            if (pdfResponse.ok) {
+              res.setHeader('Content-Type', 'application/pdf');
+              pdfResponse.body.pipe(res);
+              return;
+            }
+          }
 
-          res.status(response.status);
-          response.body.pipe(res);
+          // Fallback to parsing HTML if PDF fetch fails
+          const title = $('title').text() || 'Patent Title';
+          const abstract = $('abstract').text() || 'No abstract available.';
+          const publicationNumber = $('meta[name="DC.identifier"]').attr('content') || 'Unknown';
+          const inventor = $('meta[name="DC.contributor"]').attr('content') || 'Unknown';
+          const filingDate = $('meta[name="DC.date"]').attr('content') || 'Unknown';
+          const description = $('description').text() || 'No description available.';
+          const claims = $('claims').text() || 'No claims available.';
+
+          const simplifiedHtml = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9;">
+              <h1 style="color: #1a73e8;">${title}</h1>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Publication Number</h2>
+                <p>${publicationNumber}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Inventor</h2>
+                <p>${inventor}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Filing Date</h2>
+                <p>${filingDate}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Abstract</h2>
+                <p style="line-height: 1.6;">${abstract}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Description</h2>
+                <p style="line-height: 1.6;">${description}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Claims</h2>
+                <p style="line-height: 1.6;">${claims}</p>
+              </section>
+              <p><a href="${url}" target="_blank" style="color: #1a73e8; text-decoration: none;">View Original Patent on Google Patents</a></p>
+            </div>
+          `;
+
+          res.setHeader('Content-Type', 'text/html');
+          res.send(simplifiedHtml);
           return;
         }
 
