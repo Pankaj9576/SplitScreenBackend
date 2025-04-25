@@ -13,7 +13,7 @@ const corsMiddleware = cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'OPTIONS'], // Explicitly allow these methods
+  methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
 });
 
@@ -49,7 +49,8 @@ module.exports = (req, res) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     corsMiddleware(req, res, () => {
-      res.status(200).end();
+      res.status(200).setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.end();
     });
     return;
   }
@@ -60,7 +61,7 @@ module.exports = (req, res) => {
       const path = req.url.split('?')[0]; // Extract path without query params
 
       // Handle /proxy endpoint (GET)
-      if (req.method === 'GET' && path === '/api/server/proxy') {
+      if (req.method === 'GET' && path === '/proxy') {
         const { url } = req.query;
 
         if (!url) {
@@ -74,6 +75,8 @@ module.exports = (req, res) => {
         const response = await fetch(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
           },
         });
 
@@ -92,7 +95,7 @@ module.exports = (req, res) => {
       }
 
       // Handle /upload endpoint (POST)
-      if (req.method === 'POST' && path === '/api/server/upload') {
+      if (req.method === 'POST' && path === '/upload') {
         console.log('Handling file upload');
 
         const uploadMiddleware = upload.single('file');

@@ -8,20 +8,24 @@
       }
     },
     {
-      "src": "api/server.js",
+      "src": "api/proxy.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "api/upload.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
-      "src": "/api/server/proxy",
+      "src": "/api/proxy",
       "methods": ["GET", "OPTIONS"],
-      "dest": "/api/server.js"
+      "dest": "/api/proxy.js"
     },
     {
-      "src": "/api/server/upload",
+      "src": "/api/upload",
       "methods": ["POST", "OPTIONS"],
-      "dest": "/api/server.js"
+      "dest": "/api/upload.js"
     },
     {
       "src": "/(.*)",
