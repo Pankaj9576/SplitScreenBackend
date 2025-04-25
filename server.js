@@ -97,12 +97,11 @@ module.exports = (req, res) => {
         res.setHeader('Content-Disposition', 'inline');
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        // Special handling for Google Patents
-        if (url.includes('patents.google.com') && contentType.includes('text/html')) {
-          res.status(200).json({
-            message: 'Google Patents page cannot be rendered directly. Click to open in a new tab.',
-            url: url,
-          });
+        // Fetch and return HTML content for Google Patents
+        if (url.includes('patents.google.com')) {
+          const html = await response.text();
+          res.setHeader('Content-Type', 'text/html');
+          res.send(html);
           return;
         }
 
