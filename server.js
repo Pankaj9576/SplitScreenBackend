@@ -7,10 +7,11 @@ const fetch = require('node-fetch');
 const corsMiddleware = cors({
   origin: (origin, callback) => {
     const allowedOrigins = ['https://projectbayslope.vercel.app', 'http://localhost:3000'];
+    console.log(`CORS origin check - Origin: ${origin}`); // Debug log
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      callback(new Error(`Not allowed by CORS: ${origin}`));
     }
   },
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -49,11 +50,13 @@ module.exports = (req, res) => {
 
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
+    console.log('Handling OPTIONS preflight request');
     corsMiddleware(req, res, () => {
       res.status(200)
         .setHeader('Access-Control-Allow-Origin', req.headers.origin || '*')
         .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
         .setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      console.log('OPTIONS response sent');
       res.end();
     });
     return;
@@ -70,7 +73,8 @@ module.exports = (req, res) => {
 
         if (!url) {
           console.log('Missing URL parameter');
-          return res.status(400).json({ error: 'URL parameter is required' });
+          res.status(400).json({ error: 'URL parameter is required' });
+          return;
         }
 
         console.log(`Proxy GET request for URL: ${url}`);
@@ -113,13 +117,15 @@ module.exports = (req, res) => {
         uploadMiddleware(req, res, async (err) => {
           if (err) {
             console.log('Multer error:', err.message);
-            return res.status(400).json({ error: err.message });
+            res.status(400).json({ error: err.message });
+            return;
           }
 
           try {
             if (!req.file) {
               console.log('No file uploaded');
-              return res.status(400).json({ error: 'No file uploaded' });
+              res.status(400).json({ error: 'No file uploaded' });
+              return;
             }
 
             console.log(`File uploaded: ${req.file.originalname}, Type: ${req.file.mimetype}`);
