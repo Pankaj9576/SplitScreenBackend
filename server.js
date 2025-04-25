@@ -2,6 +2,7 @@ const cors = require('cors');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const fetch = require('node-fetch');
+const cheerio = require('cheerio'); // Add cheerio for HTML parsing
 
 // CORS middleware
 const corsMiddleware = cors({
@@ -97,11 +98,54 @@ module.exports = (req, res) => {
         res.setHeader('Content-Disposition', 'inline');
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        // Fetch and return HTML content for Google Patents
+        // Fetch and parse HTML content for Google Patents
         if (url.includes('patents.google.com')) {
           const html = await response.text();
+          const $ = cheerio.load(html);
+
+          // Extract key sections from the patent page
+          const title = $('title').text() || 'Patent Title';
+          const abstract = $('abstract').text() || 'No abstract available.';
+          const publicationNumber = $('meta[name="DC.identifier"]').attr('content') || 'Unknown';
+          const inventor = $('meta[name="DC.contributor"]').attr('content') || 'Unknown';
+          const filingDate = $('meta[name="DC.date"]').attr('content') || 'Unknown';
+          const description = $('description').text() || 'No description available.';
+          const claims = $('claims').text() || 'No claims available.';
+
+          // Construct a simplified HTML response with inline styles
+          const simplifiedHtml = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9;">
+              <h1 style="color: #1a73e8;">${title}</h1>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Publication Number</h2>
+                <p>${publicationNumber}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Inventor</h2>
+                <p>${inventor}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Filing Date</h2>
+                <p>${filingDate}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Abstract</h2>
+                <p style="line-height: 1.6;">${abstract}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Description</h2>
+                <p style="line-height: 1.6;">${description}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Claims</h2>
+                <p style="line-height: 1.6;">${claims}</p>
+              </section>
+              <p><a href="${url}" target="_blank" style="color: #1a73e8; text-decoration: none;">View Original Patent on Google Patents</a></p>
+            </div>
+          `;
+
           res.setHeader('Content-Type', 'text/html');
-          res.send(html);
+          res.send(simplifiedHtml);
           return;
         }
 
