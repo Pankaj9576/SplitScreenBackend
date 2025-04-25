@@ -1,14 +1,7 @@
 {
   "builds": [
     {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "frontend/build"
-      }
-    },
-    {
-      "src": "proxy-server/server.js",
+      "src": "server.js",
       "use": "@vercel/node"
     }
   ],
@@ -16,16 +9,16 @@
     {
       "src": "/api/proxy",
       "methods": ["GET", "OPTIONS"],
-      "dest": "/proxy-server/server.js"
+      "dest": "server.js"
     },
     {
       "src": "/api/upload",
       "methods": ["POST", "OPTIONS"],
-      "dest": "/proxy-server/server.js"
+      "dest": "server.js"
     },
     {
       "src": "/(.*)",
-      "dest": "/frontend/build/$1"
+      "dest": "server.js"
     }
   ]
 }

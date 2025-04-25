@@ -6,7 +6,7 @@ const fetch = require('node-fetch');
 // CORS middleware
 const corsMiddleware = cors({
   origin: (origin, callback) => {
-    const allowedOrigins = ['https://projectbayslope-5lcf.vercel.app', 'http://localhost:3000'];
+    const allowedOrigins = ['https://projectbayslope.vercel.app', 'http://localhost:3000'];
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -45,14 +45,15 @@ const upload = multer({
 
 // Vercel Function handler
 module.exports = (req, res) => {
-  console.log(`Received request: ${req.method} ${req.url}`); // Debug log
+  console.log(`Received request: ${req.method} ${req.url}`);
 
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     corsMiddleware(req, res, () => {
-      res.status(200).setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+      res.status(200)
+        .setHeader('Access-Control-Allow-Origin', req.headers.origin || '*')
+        .setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+        .setHeader('Access-Control-Allow-Headers', 'Content-Type');
       res.end();
     });
     return;
@@ -91,7 +92,7 @@ module.exports = (req, res) => {
         res.setHeader('Content-Disposition', 'inline');
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        // Special handling for Google Patents (non-renderable directly)
+        // Special handling for Google Patents
         if (url.includes('patents.google.com') && contentType.includes('text/html')) {
           res.status(200).json({
             message: 'Google Patents page cannot be rendered directly. Click to open in a new tab.',
@@ -106,7 +107,7 @@ module.exports = (req, res) => {
 
       // Handle /api/upload endpoint (POST)
       if (req.method === 'POST' && path === '/api/upload') {
-        console.log('Handling file upload');
+        console.log('Handling POST request for /api/upload');
 
         const uploadMiddleware = upload.single('file');
         uploadMiddleware(req, res, async (err) => {
