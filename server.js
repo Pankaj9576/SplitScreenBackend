@@ -63,8 +63,8 @@ module.exports = (req, res) => {
     try {
       const path = req.url.split('?')[0]; // Extract path without query params
 
-      // Handle /proxy endpoint (GET)
-      if (req.method === 'GET' && path === '/proxy') {
+      // Handle /api/proxy endpoint (GET)
+      if (req.method === 'GET' && path === '/api/proxy') {
         const { url } = req.query;
 
         if (!url) {
@@ -97,8 +97,8 @@ module.exports = (req, res) => {
         return;
       }
 
-      // Handle /upload endpoint (POST)
-      if (req.method === 'POST' && path === '/upload') {
+      // Handle /api/upload endpoint (POST)
+      if (req.method === 'POST' && path === '/api/upload') {
         console.log('Handling file upload');
 
         const uploadMiddleware = upload.single('file');

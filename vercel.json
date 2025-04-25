@@ -8,11 +8,7 @@
       }
     },
     {
-      "src": "api/proxy.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/upload.js",
+      "src": "proxy-server/server.js",
       "use": "@vercel/node"
     }
   ],
@@ -20,12 +16,12 @@
     {
       "src": "/api/proxy",
       "methods": ["GET", "OPTIONS"],
-      "dest": "/api/proxy.js"
+      "dest": "/proxy-server/server.js"
     },
     {
       "src": "/api/upload",
       "methods": ["POST", "OPTIONS"],
-      "dest": "/api/upload.js"
+      "dest": "/proxy-server/server.js"
     },
     {
       "src": "/(.*)",
