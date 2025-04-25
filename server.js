@@ -13,6 +13,8 @@ const corsMiddleware = cors({
       callback(new Error('Not allowed by CORS'));
     }
   },
+  methods: ['GET', 'POST', 'OPTIONS'], // Explicitly allow these methods
+  allowedHeaders: ['Content-Type'],
 });
 
 // Multer setup for file uploads
@@ -41,15 +43,28 @@ const upload = multer({
 });
 
 // Vercel Function handler
-module.exports = async (req, res) => {
-  // Apply CORS middleware
+module.exports = (req, res) => {
+  console.log(`Received request: ${req.method} ${req.url}`); // Debug log
+
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    corsMiddleware(req, res, () => {
+      res.status(200).end();
+    });
+    return;
+  }
+
+  // Apply CORS middleware for all requests
   corsMiddleware(req, res, async () => {
     try {
+      const path = req.url.split('?')[0]; // Extract path without query params
+
       // Handle /proxy endpoint (GET)
-      if (req.method === 'GET' && req.path === '/proxy') {
+      if (req.method === 'GET' && path === '/api/server/proxy') {
         const { url } = req.query;
 
         if (!url) {
+          console.log('Missing URL parameter');
           res.status(400).send('URL parameter is required');
           return;
         }
@@ -77,19 +92,25 @@ module.exports = async (req, res) => {
       }
 
       // Handle /upload endpoint (POST)
-      if (req.method === 'POST' && req.path === '/upload') {
+      if (req.method === 'POST' && path === '/api/server/upload') {
+        console.log('Handling file upload');
+
         const uploadMiddleware = upload.single('file');
         uploadMiddleware(req, res, async (err) => {
           if (err) {
+            console.log('Multer error:', err.message);
             res.status(400).json({ error: err.message });
             return;
           }
 
           try {
             if (!req.file) {
+              console.log('No file uploaded');
               res.status(400).json({ error: 'No file uploaded' });
               return;
             }
+
+            console.log(`File uploaded: ${req.file.originalname}, Type: ${req.file.mimetype}`);
 
             res.setHeader('Content-Disposition', `inline; filename="${req.file.originalname}"`);
             res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
@@ -111,6 +132,7 @@ module.exports = async (req, res) => {
       }
 
       // If the route doesn't match
+      console.log(`Route not found: ${req.method} ${path}`);
       res.status(404).send('Endpoint not found');
     } catch (error) {
       console.error('Server error:', error.message);
