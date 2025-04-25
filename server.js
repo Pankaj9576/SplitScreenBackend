@@ -2,7 +2,7 @@ const cors = require('cors');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const fetch = require('node-fetch');
-const cheerio = require('cheerio');
+const cheerio = require('cheerio'); // For HTML parsing
 
 // CORS middleware
 const corsMiddleware = cors({
@@ -80,83 +80,6 @@ module.exports = (req, res) => {
 
         console.log(`Proxy GET request for URL: ${url}`);
 
-        // Handle Google Patents links by fetching the PDF
-        if (url.includes('patents.google.com')) {
-          // Step 1: Construct the PDF URL directly
-          const patentNumberMatch = url.match(/patent\/(US\d+[A-Z]?\d+)/);
-          if (!patentNumberMatch) {
-            throw new Error('Invalid patent URL format');
-          }
-          const patentNumber = patentNumberMatch[1];
-          const pdfUrl = `https://patents.google.com/patent/${patentNumber}/pdf`;
-
-          // Step 2: Fetch the PDF
-          console.log(`Fetching PDF from: ${pdfUrl}`);
-          const pdfResponse = await fetch(pdfUrl, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-              'Accept': 'application/pdf',
-              'Accept-Language': 'en-US,en;q=0.5',
-              'Referer': url,
-              'Connection': 'keep-alive',
-            },
-          });
-
-          if (!pdfResponse.ok) {
-            // Fallback: Fetch the patent page to get basic info
-            const pageResponse = await fetch(url, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'en-US,en;q=0.5',
-                'Referer': 'https://www.google.com/',
-                'Connection': 'keep-alive',
-              },
-            });
-
-            if (!pageResponse.ok) {
-              throw new Error(`Failed to fetch patent page: ${pageResponse.statusText}`);
-            }
-
-            const html = await pageResponse.text();
-            const $ = cheerio.load(html);
-            const title = $('title').text() || 'Patent Title';
-            const abstract = $('abstract').text() || 'No abstract available.';
-            const publicationNumber = $('meta[name="DC.identifier"]').attr('content') || 'Unknown';
-            const inventor = $('meta[name="DC.contributor"]').attr('content') || 'Unknown';
-
-            const fallbackHtml = `
-              <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9;">
-                <h1 style="color: #1a73e8;">${title}</h1>
-                <section style="margin-bottom: 20px;">
-                  <h2 style="color: #202124;">Publication Number</h2>
-                  <p>${publicationNumber}</p>
-                </section>
-                <section style="margin-bottom: 20px;">
-                  <h2 style="color: #202124;">Inventor</h2>
-                  <p>${inventor}</p>
-                </section>
-                <section style="margin-bottom: 20px;">
-                  <h2 style="color: #202124;">Abstract</h2>
-                  <p style="line-height: 1.6;">${abstract}</p>
-                </section>
-                <p><a href="${url}" target="_blank" style="color: #1a73e8; text-decoration: none;">View Original Patent on Google Patents</a></p>
-              </div>
-            `;
-            res.setHeader('Content-Type', 'text/html');
-            res.status(200).send(fallbackHtml);
-            return;
-          }
-
-          // Step 3: Proxy the PDF content
-          res.setHeader('Content-Type', 'application/pdf');
-          res.setHeader('Content-Disposition', 'inline');
-          res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
-          pdfResponse.body.pipe(res);
-          return;
-        }
-
-        // Handle non-patent URLs
         const response = await fetch(url, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -174,6 +97,70 @@ module.exports = (req, res) => {
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Disposition', 'inline');
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+
+        // Handle Google Patents link
+        if (url.includes('patents.google.com')) {
+          const html = await response.text();
+          const $ = cheerio.load(html);
+          const pdfUrl = $('a[href*="/download/pdf"]').attr('href');
+          if (pdfUrl) {
+            const fullPdfUrl = `https://patents.google.com${pdfUrl}`;
+            const pdfResponse = await fetch(fullPdfUrl, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+              },
+            });
+            if (pdfResponse.ok) {
+              res.setHeader('Content-Type', 'application/pdf');
+              pdfResponse.body.pipe(res);
+              return;
+            }
+          }
+
+          // Fallback to parsing HTML if PDF fetch fails
+          const title = $('title').text() || 'Patent Title';
+          const abstract = $('abstract').text() || 'No abstract available.';
+          const publicationNumber = $('meta[name="DC.identifier"]').attr('content') || 'Unknown';
+          const inventor = $('meta[name="DC.contributor"]').attr('content') || 'Unknown';
+          const filingDate = $('meta[name="DC.date"]').attr('content') || 'Unknown';
+          const description = $('description').text() || 'No description available.';
+          const claims = $('claims').text() || 'No claims available.';
+
+          const simplifiedHtml = `
+            <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9;">
+              <h1 style="color: #1a73e8;">${title}</h1>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Publication Number</h2>
+                <p>${publicationNumber}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Inventor</h2>
+                <p>${inventor}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Filing Date</h2>
+                <p>${filingDate}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Abstract</h2>
+                <p style="line-height: 1.6;">${abstract}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Description</h2>
+                <p style="line-height: 1.6;">${description}</p>
+              </section>
+              <section style="margin-bottom: 20px;">
+                <h2 style="color: #202124;">Claims</h2>
+                <p style="line-height: 1.6;">${claims}</p>
+              </section>
+              <p><a href="${url}" target="_blank" style="color: #1a73e8; text-decoration: none;">View Original Patent on Google Patents</a></p>
+            </div>
+          `;
+
+          res.setHeader('Content-Type', 'text/html');
+          res.send(simplifiedHtml);
+          return;
+        }
 
         response.body.pipe(res);
         return;
