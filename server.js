@@ -82,41 +82,70 @@ module.exports = (req, res) => {
 
         // Handle Google Patents links by fetching the PDF
         if (url.includes('patents.google.com')) {
-          // Step 1: Fetch the patent page to find the PDF link
-          const response = await fetch(url, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-              'Accept-Language': 'en-US,en;q=0.5',
-            },
-            mode: 'cors',
-          });
-
-          if (!response.ok) {
-            throw new Error(`Failed to fetch patent page: ${response.statusText}`);
+          // Step 1: Construct the PDF URL directly
+          const patentNumberMatch = url.match(/patent\/(US\d+[A-Z]?\d+)/);
+          if (!patentNumberMatch) {
+            throw new Error('Invalid patent URL format');
           }
-
-          const html = await response.text();
-          const $ = cheerio.load(html);
-          const pdfUrl = $('a[href*="/pdf/"]').attr('href'); // Find the PDF download link
-
-          if (!pdfUrl) {
-            throw new Error('Could not find PDF link on the patent page');
-          }
+          const patentNumber = patentNumberMatch[1];
+          const pdfUrl = `https://patents.google.com/patent/${patentNumber}/pdf`;
 
           // Step 2: Fetch the PDF
-          const fullPdfUrl = `https://patents.google.com${pdfUrl}`;
-          console.log(`Fetching PDF from: ${fullPdfUrl}`);
-          const pdfResponse = await fetch(fullPdfUrl, {
+          console.log(`Fetching PDF from: ${pdfUrl}`);
+          const pdfResponse = await fetch(pdfUrl, {
             headers: {
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
               'Accept': 'application/pdf',
               'Accept-Language': 'en-US,en;q=0.5',
+              'Referer': url,
+              'Connection': 'keep-alive',
             },
           });
 
           if (!pdfResponse.ok) {
-            throw new Error(`Failed to fetch PDF: ${pdfResponse.statusText}`);
+            // Fallback: Fetch the patent page to get basic info
+            const pageResponse = await fetch(url, {
+              headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.5',
+                'Referer': 'https://www.google.com/',
+                'Connection': 'keep-alive',
+              },
+            });
+
+            if (!pageResponse.ok) {
+              throw new Error(`Failed to fetch patent page: ${pageResponse.statusText}`);
+            }
+
+            const html = await pageResponse.text();
+            const $ = cheerio.load(html);
+            const title = $('title').text() || 'Patent Title';
+            const abstract = $('abstract').text() || 'No abstract available.';
+            const publicationNumber = $('meta[name="DC.identifier"]').attr('content') || 'Unknown';
+            const inventor = $('meta[name="DC.contributor"]').attr('content') || 'Unknown';
+
+            const fallbackHtml = `
+              <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9;">
+                <h1 style="color: #1a73e8;">${title}</h1>
+                <section style="margin-bottom: 20px;">
+                  <h2 style="color: #202124;">Publication Number</h2>
+                  <p>${publicationNumber}</p>
+                </section>
+                <section style="margin-bottom: 20px;">
+                  <h2 style="color: #202124;">Inventor</h2>
+                  <p>${inventor}</p>
+                </section>
+                <section style="margin-bottom: 20px;">
+                  <h2 style="color: #202124;">Abstract</h2>
+                  <p style="line-height: 1.6;">${abstract}</p>
+                </section>
+                <p><a href="${url}" target="_blank" style="color: #1a73e8; text-decoration: none;">View Original Patent on Google Patents</a></p>
+              </div>
+            `;
+            res.setHeader('Content-Type', 'text/html');
+            res.status(200).send(fallbackHtml);
+            return;
           }
 
           // Step 3: Proxy the PDF content
