@@ -15,6 +15,7 @@ const corsMiddleware = cors({
   },
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
+  credentials: true,
 });
 
 // Multer setup for file uploads
@@ -50,6 +51,8 @@ module.exports = (req, res) => {
   if (req.method === 'OPTIONS') {
     corsMiddleware(req, res, () => {
       res.status(200).setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
       res.end();
     });
     return;
@@ -66,7 +69,7 @@ module.exports = (req, res) => {
 
         if (!url) {
           console.log('Missing URL parameter');
-          res.status(400).send('URL parameter is required');
+          res.status(400).json({ error: 'URL parameter is required' });
           return;
         }
 
@@ -136,10 +139,10 @@ module.exports = (req, res) => {
 
       // If the route doesn't match
       console.log(`Route not found: ${req.method} ${path}`);
-      res.status(404).send('Endpoint not found');
+      res.status(404).json({ error: 'Endpoint not found' });
     } catch (error) {
       console.error('Server error:', error.message);
-      res.status(500).send(`Server error: ${error.message}`);
+      res.status(500).json({ error: `Server error: ${error.message}` });
     }
   });
 };
