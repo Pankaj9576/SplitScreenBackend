@@ -69,8 +69,7 @@ module.exports = (req, res) => {
 
         if (!url) {
           console.log('Missing URL parameter');
-          res.status(400).json({ error: 'URL parameter is required' });
-          return;
+          return res.status(400).json({ error: 'URL parameter is required' });
         }
 
         console.log(`Proxy GET request for URL: ${url}`);
@@ -92,7 +91,15 @@ module.exports = (req, res) => {
         res.setHeader('Content-Disposition', 'inline');
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        console.log(`Content-Type: ${contentType}`);
+        // Special handling for Google Patents (non-renderable directly)
+        if (url.includes('patents.google.com') && contentType.includes('text/html')) {
+          res.status(200).json({
+            message: 'Google Patents page cannot be rendered directly. Click to open in a new tab.',
+            url: url,
+          });
+          return;
+        }
+
         response.body.pipe(res);
         return;
       }
@@ -105,15 +112,13 @@ module.exports = (req, res) => {
         uploadMiddleware(req, res, async (err) => {
           if (err) {
             console.log('Multer error:', err.message);
-            res.status(400).json({ error: err.message });
-            return;
+            return res.status(400).json({ error: err.message });
           }
 
           try {
             if (!req.file) {
               console.log('No file uploaded');
-              res.status(400).json({ error: 'No file uploaded' });
-              return;
+              return res.status(400).json({ error: 'No file uploaded' });
             }
 
             console.log(`File uploaded: ${req.file.originalname}, Type: ${req.file.mimetype}`);
