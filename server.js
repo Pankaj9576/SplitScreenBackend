@@ -85,6 +85,7 @@ module.exports = (req, res) => {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
           },
+          mode: 'cors',
         });
 
         if (!response.ok) {
