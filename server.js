@@ -86,7 +86,6 @@ module.exports = (req, res) => {
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
           },
-          mode: 'cors',
         });
 
         if (!response.ok) {
@@ -95,73 +94,90 @@ module.exports = (req, res) => {
 
         const contentType = response.headers.get('content-type') || 'application/octet-stream';
         res.setHeader('Content-Type', contentType);
-        res.setHeader('Content-Disposition', 'inline');
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
         // Handle Google Patents link
         if (url.includes('patents.google.com')) {
           const html = await response.text();
           const $ = cheerio.load(html);
-          const pdfUrl = $('a[href*="/download/pdf"]').attr('href');
-          if (pdfUrl) {
-            const fullPdfUrl = `https://patents.google.com${pdfUrl}`;
-            const pdfResponse = await fetch(fullPdfUrl, {
-              headers: {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-              },
-            });
-            if (pdfResponse.ok) {
-              res.setHeader('Content-Type', 'application/pdf');
-              pdfResponse.body.pipe(res);
-              return;
+
+          // Make all resource URLs absolute (e.g., CSS, images, scripts)
+          $('link').each((i, elem) => {
+            const href = $(elem).attr('href');
+            if (href && !href.startsWith('http')) {
+              $(elem).attr('href', `https://patents.google.com${href}`);
             }
-          }
+          });
+          $('script').each((i, elem) => {
+            const src = $(elem).attr('src');
+            if (src && !src.startsWith('http')) {
+              $(elem).attr('src', `https://patents.google.com${src}`);
+            }
+          });
+          $('img').each((i, elem) => {
+            const src = $(elem).attr('src');
+            if (src && !src.startsWith('http')) {
+              $(elem).attr('src', `https://patents.google.com${src}`);
+            }
+          });
+          $('a').each((i, elem) => {
+            const href = $(elem).attr('href');
+            if (href && !href.startsWith('http')) {
+              $(elem).attr('href', `https://patents.google.com${href}`);
+            }
+          });
 
-          // Fallback to parsing HTML if PDF fetch fails
-          const title = $('title').text() || 'Patent Title';
-          const abstract = $('abstract').text() || 'No abstract available.';
-          const publicationNumber = $('meta[name="DC.identifier"]').attr('content') || 'Unknown';
-          const inventor = $('meta[name="DC.contributor"]').attr('content') || 'Unknown';
-          const filingDate = $('meta[name="DC.date"]').attr('content') || 'Unknown';
-          const description = $('description').text() || 'No description available.';
-          const claims = $('claims').text() || 'No claims available.';
+          // Remove scripts that might cause dynamic behavior (optional, if you want fully static)
+          $('script').remove();
 
-          const simplifiedHtml = `
-            <div style="font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9;">
-              <h1 style="color: #1a73e8;">${title}</h1>
-              <section style="margin-bottom: 20px;">
-                <h2 style="color: #202124;">Publication Number</h2>
-                <p>${publicationNumber}</p>
-              </section>
-              <section style="margin-bottom: 20px;">
-                <h2 style="color: #202124;">Inventor</h2>
-                <p>${inventor}</p>
-              </section>
-              <section style="margin-bottom: 20px;">
-                <h2 style="color: #202124;">Filing Date</h2>
-                <p>${filingDate}</p>
-              </section>
-              <section style="margin-bottom: 20px;">
-                <h2 style="color: #202124;">Abstract</h2>
-                <p style="line-height: 1.6;">${abstract}</p>
-              </section>
-              <section style="margin-bottom: 20px;">
-                <h2 style="color: #202124;">Description</h2>
-                <p style="line-height: 1.6;">${description}</p>
-              </section>
-              <section style="margin-bottom: 20px;">
-                <h2 style="color: #202124;">Claims</h2>
-                <p style="line-height: 1.6;">${claims}</p>
-              </section>
-              <p><a href="${url}" target="_blank" style="color: #1a73e8; text-decoration: none;">View Original Patent on Google Patents</a></p>
-            </div>
+          // Add some basic styling to ensure readability
+          const styledHtml = `
+            <html>
+              <head>
+                ${$('head').html()}
+                <style>
+                  body {
+                    font-family: Arial, sans-serif;
+                    padding: 20px;
+                    background-color: #f9f9f9;
+                    line-height: 1.6;
+                  }
+                  h1, h2, h3 {
+                    color: #202124;
+                  }
+                  a {
+                    color: #1a73e8;
+                    text-decoration: none;
+                  }
+                  a:hover {
+                    text-decoration: underline;
+                  }
+                  .patent-content {
+                    max-width: 800px;
+                    margin: 0 auto;
+                  }
+                </style>
+              </head>
+              <body>
+                <div class="patent-content">
+                  ${$('body').html()}
+                  <p style="margin-top: 20px;">
+                    <a href="${url}" target="_blank" style="color: #1a73e8;">
+                      View Original Patent on Google Patents
+                    </a>
+                  </p>
+                </div>
+              </body>
+            </html>
           `;
 
           res.setHeader('Content-Type', 'text/html');
-          res.send(simplifiedHtml);
+          res.send(styledHtml);
           return;
         }
 
+        // For non-Google Patents URLs, stream the response as-is
+        res.setHeader('Content-Disposition', 'inline');
         response.body.pipe(res);
         return;
       }
@@ -192,7 +208,7 @@ module.exports = (req, res) => {
 
             if (req.file.mimetype.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
               const { value: html } = await mammoth.convertToHtml({ buffer: req.file.buffer });
-              res.setHeader('Content-Type', 'text/html');
+              res.setHeader('Content-Type', "text/html");
               res.send(html);
             } else {
               res.setHeader('Content-Type', req.file.mimetype);
