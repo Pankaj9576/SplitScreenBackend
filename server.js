@@ -2,7 +2,6 @@ const cors = require('cors');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const fetch = require('node-fetch');
-const cheerio = require('cheerio');
 
 const corsMiddleware = cors({
   origin: (origin, callback) => {
@@ -90,25 +89,10 @@ module.exports = (req, res) => {
         res.setHeader('Content-Type', contentType);
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        if (url.includes('patents.google.com')) {
+        if (contentType.includes('text/html') && url.includes('patents.google.com')) {
           const html = await response.text();
-          const $ = cheerio.load(html);
-
-          // Extract patent metadata
-          const patentData = {
-            title: $('title').text().split('-')[0].trim(),
-            abstract: $('abstract').text().trim() || 'Abstract not available',
-            publication_number: $('[itemprop="publicationNumber"]').text().trim() || 'N/A',
-            filing_date: $('[itemprop="filingDate"]').text().trim() || 'N/A',
-            grant_date: $('[itemprop="grantDate"]').text().trim() || 'N/A',
-            inventors: $('[itemprop="inventor"]').map((i, elem) => $(elem).text().trim()).get(),
-            assignee: $('[itemprop="assignee"]').map((i, elem) => $(elem).text().trim()).get(),
-            cpc_codes: $('[itemprop="cpc"]').map((i, elem) => $(elem).text().trim()).get(),
-            patent_url: url,
-          };
-
-          res.setHeader('Content-Type', 'application/json');
-          res.send(JSON.stringify(patentData));
+          res.setHeader('Content-Type', 'text/html');
+          res.send(html);
           return;
         }
 
