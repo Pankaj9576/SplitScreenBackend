@@ -2,6 +2,7 @@ const cors = require('cors');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const fetch = require('node-fetch');
+const cheerio = require('cheerio');
 
 const corsMiddleware = cors({
   origin: (origin, callback) => {
@@ -91,8 +92,36 @@ module.exports = (req, res) => {
 
         if (url.includes('patents.google.com')) {
           const html = await response.text();
+          const $ = cheerio.load(html);
+
+          // Rewrite relative URLs for scripts, styles, images, etc. to absolute URLs
+          const baseUrl = new URL(url).origin;
+          $('script[src], link[href], img[src], a[href]').each((i, elem) => {
+            const src = $(elem).attr('src');
+            const href = $(elem).attr('href');
+            if (src && !src.startsWith('http')) {
+              $(elem).attr('src', new URL(src, baseUrl).href);
+            }
+            if (href && !href.startsWith('http')) {
+              $(elem).attr('href', new URL(href, baseUrl).href);
+            }
+          });
+
+          // Optionally proxy resources through your server to avoid CORS issues
+          const proxyBase = `${req.headers.origin || 'https://split-screen-backend.vercel.app'}/api/proxy?url=`;
+          $('script[src], link[href], img[src]').each((i, elem) => {
+            const src = $(elem).attr('src');
+            const href = $(elem).attr('href');
+            if (src && src.startsWith('http')) {
+              $(elem).attr('src', `${proxyBase}${encodeURIComponent(src)}`);
+            }
+            if (href && href.startsWith('http')) {
+              $(elem).attr('href', `${proxyBase}${encodeURIComponent(href)}`);
+            }
+          });
+
           res.setHeader('Content-Type', 'text/html');
-          res.send(html);
+          res.send($.html());
           return;
         }
 
