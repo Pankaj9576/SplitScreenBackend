@@ -94,34 +94,21 @@ module.exports = (req, res) => {
           const html = await response.text();
           const $ = cheerio.load(html);
 
-          // Rewrite relative URLs for scripts, styles, images, etc. to absolute URLs
-          const baseUrl = new URL(url).origin;
-          $('script[src], link[href], img[src], a[href]').each((i, elem) => {
-            const src = $(elem).attr('src');
-            const href = $(elem).attr('href');
-            if (src && !src.startsWith('http')) {
-              $(elem).attr('src', new URL(src, baseUrl).href);
-            }
-            if (href && !href.startsWith('http')) {
-              $(elem).attr('href', new URL(href, baseUrl).href);
-            }
-          });
+          // Extract patent metadata
+          const patentData = {
+            title: $('title').text().split('-')[0].trim(),
+            abstract: $('abstract').text().trim() || 'Abstract not available',
+            publication_number: $('[itemprop="publicationNumber"]').text().trim() || 'N/A',
+            filing_date: $('[itemprop="filingDate"]').text().trim() || 'N/A',
+            grant_date: $('[itemprop="grantDate"]').text().trim() || 'N/A',
+            inventors: $('[itemprop="inventor"]').map((i, elem) => $(elem).text().trim()).get(),
+            assignee: $('[itemprop="assignee"]').map((i, elem) => $(elem).text().trim()).get(),
+            cpc_codes: $('[itemprop="cpc"]').map((i, elem) => $(elem).text().trim()).get(),
+            patent_url: url,
+          };
 
-          // Optionally proxy resources through your server to avoid CORS issues
-          const proxyBase = `${req.headers.origin || 'https://split-screen-backend.vercel.app'}/api/proxy?url=`;
-          $('script[src], link[href], img[src]').each((i, elem) => {
-            const src = $(elem).attr('src');
-            const href = $(elem).attr('href');
-            if (src && src.startsWith('http')) {
-              $(elem).attr('src', `${proxyBase}${encodeURIComponent(src)}`);
-            }
-            if (href && href.startsWith('http')) {
-              $(elem).attr('href', `${proxyBase}${encodeURIComponent(href)}`);
-            }
-          });
-
-          res.setHeader('Content-Type', 'text/html');
-          res.send($.html());
+          res.setHeader('Content-Type', 'application/json');
+          res.send(JSON.stringify(patentData));
           return;
         }
 
