@@ -126,7 +126,7 @@ module.exports = (req, res) => {
 
             if (req.file.mimetype.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
               const { value: html } = await mammoth.convertToHtml({ buffer: req.file.buffer });
-              res.setHeader('Content-Type', "text/html");
+              res.setHeader('Content-Type', 'text/html');
               res.send(html);
             } else {
               res.setHeader('Content-Type', req.file.mimetype);
