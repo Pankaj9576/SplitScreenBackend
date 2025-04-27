@@ -2,13 +2,11 @@ const cors = require('cors');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const fetch = require('node-fetch');
-const cheerio = require('cheerio'); // For HTML parsing
 
-// CORS middleware
 const corsMiddleware = cors({
   origin: (origin, callback) => {
     const allowedOrigins = ['https://projectbayslope.vercel.app', 'http://localhost:3000'];
-    console.log(`CORS origin check - Origin: ${origin}`); // Debug log
+    console.log(`CORS origin check - Origin: ${origin}`);
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -20,7 +18,6 @@ const corsMiddleware = cors({
   credentials: true,
 });
 
-// Multer setup for file uploads
 const upload = multer({
   storage: multer.memoryStorage(),
   fileFilter: (req, file, cb) => {
@@ -42,14 +39,12 @@ const upload = multer({
       cb(new Error('Unsupported file type'));
     }
   },
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB limit
+  limits: { fileSize: 20 * 1024 * 1024 },
 });
 
-// Vercel Function handler
 module.exports = (req, res) => {
   console.log(`Received request: ${req.method} ${req.url}`);
 
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     console.log('Handling OPTIONS preflight request');
     corsMiddleware(req, res, () => {
@@ -63,12 +58,10 @@ module.exports = (req, res) => {
     return;
   }
 
-  // Apply CORS middleware for all requests
   corsMiddleware(req, res, async () => {
     try {
-      const path = req.url.split('?')[0]; // Extract path without query params
+      const path = req.url.split('?')[0];
 
-      // Handle /api/proxy endpoint (GET)
       if (req.method === 'GET' && path === '/api/proxy') {
         const { url } = req.query;
 
@@ -96,93 +89,18 @@ module.exports = (req, res) => {
         res.setHeader('Content-Type', contentType);
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        // Handle Google Patents link
         if (url.includes('patents.google.com')) {
           const html = await response.text();
-          const $ = cheerio.load(html);
-
-          // Make all resource URLs absolute (e.g., CSS, images, scripts)
-          $('link').each((i, elem) => {
-            const href = $(elem).attr('href');
-            if (href && !href.startsWith('http')) {
-              $(elem).attr('href', `https://patents.google.com${href}`);
-            }
-          });
-          $('script').each((i, elem) => {
-            const src = $(elem).attr('src');
-            if (src && !src.startsWith('http')) {
-              $(elem).attr('src', `https://patents.google.com${src}`);
-            }
-          });
-          $('img').each((i, elem) => {
-            const src = $(elem).attr('src');
-            if (src && !src.startsWith('http')) {
-              $(elem).attr('src', `https://patents.google.com${src}`);
-            }
-          });
-          $('a').each((i, elem) => {
-            const href = $(elem).attr('href');
-            if (href && !href.startsWith('http')) {
-              $(elem).attr('href', `https://patents.google.com${href}`);
-            }
-          });
-
-          // Remove scripts that might cause dynamic behavior (optional, if you want fully static)
-          $('script').remove();
-
-          // Add some basic styling to ensure readability
-          const styledHtml = `
-            <html>
-              <head>
-                ${$('head').html()}
-                <style>
-                  body {
-                    font-family: Arial, sans-serif;
-                    padding: 20px;
-                    background-color: #f9f9f9;
-                    line-height: 1.6;
-                  }
-                  h1, h2, h3 {
-                    color: #202124;
-                  }
-                  a {
-                    color: #1a73e8;
-                    text-decoration: none;
-                  }
-                  a:hover {
-                    text-decoration: underline;
-                  }
-                  .patent-content {
-                    max-width: 800px;
-                    margin: 0 auto;
-                  }
-                </style>
-              </head>
-              <body>
-                <div class="patent-content">
-                  ${$('body').html()}
-                  <p style="margin-top: 20px;">
-                    <a href="${url}" target="_blank" style="color: #1a73e8;">
-                      View Original Patent on Google Patents
-                    </a>
-                  </p>
-                </div>
-              </body>
-            </html>
-          `;
-
           res.setHeader('Content-Type', 'text/html');
-          res.send(styledHtml);
+          res.send(html);
           return;
         }
 
-        // For non-Google Patents URLs, stream the response as-is
         res.setHeader('Content-Disposition', 'inline');
         response.body.pipe(res);
         return;
       }
 
-      // Handle /api/upload endpoint (POST)
       if (req.method === 'POST' && path === '/api/upload') {
         console.log('Handling POST request for /api/upload');
 
@@ -222,7 +140,6 @@ module.exports = (req, res) => {
         return;
       }
 
-      // If the route doesn't match
       console.log(`Route not found: ${req.method} ${path}`);
       res.status(404).json({ error: 'Endpoint not found' });
     } catch (error) {
