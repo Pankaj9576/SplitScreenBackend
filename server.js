@@ -117,14 +117,14 @@ module.exports = (req, res) => {
           return;
         }
 
+        // Ensure non-HTML content is displayed inline
         res.setHeader('Content-Disposition', 'inline');
         response.body.pipe(res);
         return;
       }
 
       if (req.method === 'POST' && path === '/api/upload') {
-        console.log('Handling POST request for /api/upload');
-
+        console.log('Unexpectedly hit /api/upload endpoint');
         const uploadMiddleware = upload.single('file');
         uploadMiddleware(req, res, async (err) => {
           if (err) {
@@ -142,7 +142,8 @@ module.exports = (req, res) => {
 
             console.log(`File uploaded: ${req.file.originalname}, Type: ${req.file.mimetype}`);
 
-            res.setHeader('Content-Disposition', `inline; filename="${req.file.originalname}"`);
+            // Ensure the file is displayed inline
+            res.setHeader('Content-Disposition', 'inline');
             res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
             if (req.file.mimetype.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
