@@ -6,10 +6,13 @@ const corsMiddleware = cors({
   origin: (origin, callback) => {
     const allowedOrigins = ['https://projectbayslope.vercel.app', 'http://localhost:3000'];
     console.log(`CORS origin check - Origin: ${origin}`);
+    // Allow requests with no origin (e.g., Vercel deployment tests) or if origin is in allowedOrigins
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error(`Not allowed by CORS: ${origin}`));
+      console.warn(`CORS warning - Origin not allowed: ${origin}`);
+      // Instead of throwing an error, allow the request but log the warning
+      callback(null, false);
     }
   },
   methods: ['GET', 'POST', 'OPTIONS'],
