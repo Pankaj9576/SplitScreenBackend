@@ -1,4 +1,3 @@
-
 {
   "builds": [
     {
@@ -10,6 +9,11 @@
     {
       "src": "/api/proxy",
       "methods": ["GET", "OPTIONS"],
+      "dest": "server.js"
+    },
+    {
+      "src": "/api/upload",
+      "methods": ["POST", "OPTIONS"],
       "dest": "server.js"
     },
     {
