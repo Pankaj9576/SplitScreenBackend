@@ -1,6 +1,7 @@
 const cors = require('cors');
+const multer = require('multer');
+const mammoth = require('mammoth');
 const fetch = require('node-fetch');
-const url = require('url');
 
 const corsMiddleware = cors({
   origin: (origin, callback) => {
@@ -15,6 +16,30 @@ const corsMiddleware = cors({
   methods: ['GET', 'POST', 'OPTIONS'],
   allowedHeaders: ['Content-Type'],
   credentials: true,
+});
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/pdf',
+      'text/csv',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'image/jpeg',
+      'image/png',
+    ];
+    if (allowedTypes.includes(file.mimetype) || file.mimetype === 'application/octet-stream') {
+      cb(null, true);
+    } else {
+      cb(new Error('Unsupported file type'));
+    }
+  },
+  limits: { fileSize: 20 * 1024 * 1024 },
 });
 
 module.exports = (req, res) => {
@@ -38,40 +63,25 @@ module.exports = (req, res) => {
       const path = req.url.split('?')[0];
 
       if (req.method === 'GET' && path === '/api/proxy') {
-        let { url: targetUrl } = req.query;
+        const { url } = req.query;
 
-        if (!targetUrl) {
+        if (!url) {
           console.log('Missing URL parameter');
           res.status(400).json({ error: 'URL parameter is required' });
           return;
         }
 
-        // Resolve relative URLs
-        try {
-          targetUrl = new URL(targetUrl, 'https://patents.google.com').toString();
-        } catch (e) {
-          console.log(`Invalid URL: ${targetUrl}`);
-          res.status(400).json({ error: 'Invalid URL' });
-          return;
-        }
+        console.log(`Proxy GET request for URL: ${url}`);
 
-        console.log(`Proxy GET request for URL: ${targetUrl}`);
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+          },
+        });
 
-        const fetchHeaders = {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          'Referer': 'https://patents.google.com/',
-          'Connection': 'keep-alive',
-        };
-        console.log('Fetch headers:', fetchHeaders);
-
-        let response = await fetch(targetUrl, { headers: fetchHeaders });
-
-        console.log(`Fetch response status: ${response.status}`);
         if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Fetch failed: ${response.status} - ${errorText}`);
           throw new Error(`Failed to fetch URL: ${response.statusText}`);
         }
 
@@ -79,48 +89,54 @@ module.exports = (req, res) => {
         res.setHeader('Content-Type', contentType);
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        if (contentType.includes('text/html')) {
-          let html = await response.text();
-          // Check if the response is a search page (contains "Google Patents" search form)
-          if (html.includes('Google Patents') && html.includes('Search and read the full text of patents')) {
-            console.log('Detected Google Patents search page, attempting PDF fallback');
-            // Extract the patent number from the URL
-            const patentNumberMatch = targetUrl.match(/patent\/([A-Z0-9]+)/);
-            if (patentNumberMatch) {
-              const patentNumber = patentNumberMatch[1];
-              const pdfUrl = `https://patentimages.storage.googleapis.com/pdfs/${patentNumber}.pdf`;
-              console.log(`Fetching PDF fallback: ${pdfUrl}`);
-              response = await fetch(pdfUrl, { headers: fetchHeaders });
-
-              if (!response.ok) {
-                const pdfErrorText = await response.text();
-                console.error(`PDF fetch failed: ${response.status} - ${pdfErrorText}`);
-                throw new Error(`Failed to fetch PDF: ${response.statusText}`);
-              }
-
-              const pdfContentType = response.headers.get('content-type') || 'application/pdf';
-              res.setHeader('Content-Type', pdfContentType);
-              res.setHeader('Content-Disposition', 'inline');
-              response.body.pipe(res);
-              return;
-            } else {
-              throw new Error('Could not extract patent number for PDF fallback');
-            }
-          }
-
-          // Rewrite relative URLs to absolute URLs
-          html = html.replace(
-            /(href|src)="\/([^"]*)"/g,
-            `$1="https://patents.google.com/$2"`
-          );
+        if (contentType.includes('text/html') && url.includes('patents.google.com')) {
+          const html = await response.text();
           res.setHeader('Content-Type', 'text/html');
           res.send(html);
           return;
         }
 
-        // Ensure non-HTML content is displayed inline
         res.setHeader('Content-Disposition', 'inline');
         response.body.pipe(res);
+        return;
+      }
+
+      if (req.method === 'POST' && path === '/api/upload') {
+        console.log('Handling POST request for /api/upload');
+
+        const uploadMiddleware = upload.single('file');
+        uploadMiddleware(req, res, async (err) => {
+          if (err) {
+            console.log('Multer error:', err.message);
+            res.status(400).json({ error: err.message });
+            return;
+          }
+
+          try {
+            if (!req.file) {
+              console.log('No file uploaded');
+              res.status(400).json({ error: 'No file uploaded' });
+              return;
+            }
+
+            console.log(`File uploaded: ${req.file.originalname}, Type: ${req.file.mimetype}`);
+
+            res.setHeader('Content-Disposition', `inline; filename="${req.file.originalname}"`);
+            res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
+
+            if (req.file.mimetype.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+              const { value: html } = await mammoth.convertToHtml({ buffer: req.file.buffer });
+              res.setHeader('Content-Type', 'text/html');
+              res.send(html);
+            } else {
+              res.setHeader('Content-Type', req.file.mimetype);
+              res.send(req.file.buffer);
+            }
+          } catch (error) {
+            console.error('Error processing file:', error.message);
+            res.status(500).json({ error: error.message });
+          }
+        });
         return;
       }
 
