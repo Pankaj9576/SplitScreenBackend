@@ -73,36 +73,23 @@ module.exports = (req, res) => {
 
         console.log(`Proxy GET request for URL: ${url}`);
 
-        let response;
-        try {
-          response = await fetch(url, {
-            headers: {
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-              'Accept-Language': 'en-US,en;q=0.5',
-            },
-            timeout: 10000, // 10 seconds timeout
-          });
-          if (!response.ok) {
-            throw new Error(`Direct fetch failed: ${response.statusText}`);
-          }
-        } catch (directErr) {
-          console.log(`Direct fetch failed, trying proxy: ${directErr.message}`);
-          // Fallback to allorigins.win proxy
-          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-          const proxyResponse = await fetch(proxyUrl, { timeout: 10000 });
-          if (!proxyResponse.ok) {
-            throw new Error(`Proxy fetch failed: ${proxyResponse.statusText}`);
-          }
-          const proxyData = await proxyResponse.json();
-          response = { ok: true, text: () => Promise.resolve(proxyData.contents) };
+        const response = await fetch(url, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch URL: ${response.statusText}`);
         }
 
         const contentType = response.headers.get('content-type') || 'application/octet-stream';
         res.setHeader('Content-Type', contentType);
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        if (contentType.includes('text/html')) {
+        if (contentType.includes('text/html') && url.includes('patents.google.com')) {
           const html = await response.text();
           res.setHeader('Content-Type', 'text/html');
           res.send(html);
