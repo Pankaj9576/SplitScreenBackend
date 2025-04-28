@@ -73,13 +73,33 @@ module.exports = (req, res) => {
 
         console.log(`Proxy GET request for URL: ${url}`);
 
-        const response = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-          },
-        });
+        let response;
+        try {
+          response = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+              'Accept-Language': 'en-US,en;q=0.5',
+            },
+          });
+          if (!response.ok) {
+            throw new Error(`Direct fetch failed: ${response.statusText}`);
+          }
+        } catch (directErr) {
+          console.log(`Direct fetch failed, trying proxy: ${directErr.message}`);
+          // Fallback to a proxy service for Google Patents
+          if (url.includes('patents.google.com')) {
+            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+            const proxyResponse = await fetch(proxyResponse);
+            if (!proxyResponse.ok) {
+              throw new Error(`Proxy fetch failed: ${proxyResponse.statusText}`);
+            }
+            const proxyData = await proxyResponse.json();
+            response = { ok: true, text: () => Promise.resolve(proxyData.contents) };
+          } else {
+            throw directErr;
+          }
+        }
 
         if (!response.ok) {
           throw new Error(`Failed to fetch URL: ${response.statusText}`);
