@@ -2,6 +2,7 @@ const cors = require('cors');
 const multer = require('multer');
 const mammoth = require('mammoth');
 const fetch = require('node-fetch');
+const url = require('url');
 
 const corsMiddleware = cors({
   origin: (origin, callback) => {
@@ -63,17 +64,26 @@ module.exports = (req, res) => {
       const path = req.url.split('?')[0];
 
       if (req.method === 'GET' && path === '/api/proxy') {
-        const { url } = req.query;
+        let { url: targetUrl } = req.query;
 
-        if (!url) {
+        if (!targetUrl) {
           console.log('Missing URL parameter');
           res.status(400).json({ error: 'URL parameter is required' });
           return;
         }
 
-        console.log(`Proxy GET request for URL: ${url}`);
+        // Resolve relative URLs
+        try {
+          targetUrl = new URL(targetUrl, 'https://patents.google.com').toString();
+        } catch (e) {
+          console.log(`Invalid URL: ${targetUrl}`);
+          res.status(400).json({ error: 'Invalid URL' });
+          return;
+        }
 
-        const response = await fetch(url, {
+        console.log(`Proxy GET request for URL: ${targetUrl}`);
+
+        const response = await fetch(targetUrl, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -89,8 +99,13 @@ module.exports = (req, res) => {
         res.setHeader('Content-Type', contentType);
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        if (contentType.includes('text/html') && url.includes('patents.google.com')) {
-          const html = await response.text();
+        if (contentType.includes('text/html')) {
+          let html = await response.text();
+          // Rewrite relative URLs to absolute URLs
+          html = html.replace(
+            /(href|src)="\/([^"]*)"/g,
+            `$1="https://patents.google.com/$2"`
+          );
           res.setHeader('Content-Type', 'text/html');
           res.send(html);
           return;
