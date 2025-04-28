@@ -81,35 +81,28 @@ module.exports = (req, res) => {
               'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
               'Accept-Language': 'en-US,en;q=0.5',
             },
+            timeout: 10000, // 10 seconds timeout
           });
           if (!response.ok) {
             throw new Error(`Direct fetch failed: ${response.statusText}`);
           }
         } catch (directErr) {
           console.log(`Direct fetch failed, trying proxy: ${directErr.message}`);
-          // Fallback to a proxy service for Google Patents
-          if (url.includes('patents.google.com')) {
-            const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-            const proxyResponse = await fetch(proxyResponse);
-            if (!proxyResponse.ok) {
-              throw new Error(`Proxy fetch failed: ${proxyResponse.statusText}`);
-            }
-            const proxyData = await proxyResponse.json();
-            response = { ok: true, text: () => Promise.resolve(proxyData.contents) };
-          } else {
-            throw directErr;
+          // Fallback to allorigins.win proxy
+          const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
+          const proxyResponse = await fetch(proxyUrl, { timeout: 10000 });
+          if (!proxyResponse.ok) {
+            throw new Error(`Proxy fetch failed: ${proxyResponse.statusText}`);
           }
-        }
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch URL: ${response.statusText}`);
+          const proxyData = await proxyResponse.json();
+          response = { ok: true, text: () => Promise.resolve(proxyData.contents) };
         }
 
         const contentType = response.headers.get('content-type') || 'application/octet-stream';
         res.setHeader('Content-Type', contentType);
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
-        if (contentType.includes('text/html') && url.includes('patents.google.com')) {
+        if (contentType.includes('text/html')) {
           const html = await response.text();
           res.setHeader('Content-Type', 'text/html');
           res.send(html);
