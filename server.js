@@ -66,13 +66,21 @@ module.exports = (req, res) => {
         };
         console.log('Fetch headers:', fetchHeaders);
 
-        let response = await fetch(targetUrl, { headers: fetchHeaders });
+        let response;
+        try {
+          response = await fetch(targetUrl, { headers: fetchHeaders });
+        } catch (fetchError) {
+          console.error(`Fetch error: ${fetchError.message}`);
+          res.status(500).json({ error: `Failed to fetch URL: ${fetchError.message}` });
+          return;
+        }
 
         console.log(`Fetch response status: ${response.status}`);
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`Fetch failed: ${response.status} - ${errorText}`);
-          throw new Error(`Failed to fetch URL: ${response.statusText}`);
+          res.status(response.status).json({ error: `Failed to fetch URL: ${response.statusText}` });
+          return;
         }
 
         const contentType = response.headers.get('content-type') || 'application/octet-stream';
@@ -80,7 +88,15 @@ module.exports = (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
         if (contentType.includes('text/html')) {
-          let html = await response.text();
+          let html;
+          try {
+            html = await response.text();
+          } catch (textError) {
+            console.error(`Error reading response text: ${textError.message}`);
+            res.status(500).json({ error: `Error reading response: ${textError.message}` });
+            return;
+          }
+
           // Check if the response is a search page (contains "Google Patents" search form)
           if (html.includes('Google Patents') && html.includes('Search and read the full text of patents')) {
             console.log('Detected Google Patents search page, attempting PDF fallback');
@@ -90,12 +106,19 @@ module.exports = (req, res) => {
               const patentNumber = patentNumberMatch[1];
               const pdfUrl = `https://patentimages.storage.googleapis.com/pdfs/${patentNumber}.pdf`;
               console.log(`Fetching PDF fallback: ${pdfUrl}`);
-              response = await fetch(pdfUrl, { headers: fetchHeaders });
+              try {
+                response = await fetch(pdfUrl, { headers: fetchHeaders });
+              } catch (pdfFetchError) {
+                console.error(`PDF fetch error: ${pdfFetchError.message}`);
+                res.status(500).json({ error: `Failed to fetch PDF: ${pdfFetchError.message}` });
+                return;
+              }
 
               if (!response.ok) {
                 const pdfErrorText = await response.text();
                 console.error(`PDF fetch failed: ${response.status} - ${pdfErrorText}`);
-                throw new Error(`Failed to fetch PDF: ${response.statusText}`);
+                res.status(response.status).json({ error: `Failed to fetch PDF: ${response.statusText}` });
+                return;
               }
 
               const pdfContentType = response.headers.get('content-type') || 'application/pdf';
@@ -104,7 +127,8 @@ module.exports = (req, res) => {
               response.body.pipe(res);
               return;
             } else {
-              throw new Error('Could not extract patent number for PDF fallback');
+              res.status(400).json({ error: 'Could not extract patent number for PDF fallback' });
+              return;
             }
           }
 
