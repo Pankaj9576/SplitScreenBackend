@@ -111,6 +111,14 @@ module.exports = (req, res) => {
           return;
         }
 
+        // Check if the URL is a blob or local file and handle with Google Docs viewer
+        const fileExt = targetUrl.split('.').pop().toLowerCase();
+        if (['xlsx', 'doc', 'docx'].includes(fileExt)) {
+          const googleDocsUrl = `https://docs.google.com/gview?url=${encodeURIComponent(targetUrl)}&embedded=true`;
+          res.redirect(googleDocsUrl);
+          return;
+        }
+
         res.setHeader('Content-Disposition', 'inline');
         response.body.pipe(res);
         return;
