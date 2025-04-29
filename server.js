@@ -9,7 +9,8 @@ const corsMiddleware = cors({
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error(`Not allowed by CORS: ${origin}`));
+      console.warn(`CORS warning - Origin not allowed: ${origin}`);
+      callback(null, false);
     }
   },
   methods: ['GET', 'POST', 'OPTIONS'],
@@ -46,7 +47,6 @@ module.exports = (req, res) => {
           return;
         }
 
-        // Resolve relative URLs
         try {
           targetUrl = new URL(targetUrl, 'https://patents.google.com').toString();
         } catch (e) {
@@ -66,14 +66,7 @@ module.exports = (req, res) => {
         };
         console.log('Fetch headers:', fetchHeaders);
 
-        let response;
-        try {
-          response = await fetch(targetUrl, { headers: fetchHeaders });
-        } catch (fetchError) {
-          console.error(`Fetch error: ${fetchError.message}`);
-          res.status(500).json({ error: `Failed to fetch URL: ${fetchError.message}` });
-          return;
-        }
+        let response = await fetch(targetUrl, { headers: fetchHeaders });
 
         console.log(`Fetch response status: ${response.status}`);
         if (!response.ok) {
@@ -88,41 +81,22 @@ module.exports = (req, res) => {
         res.setHeader('Access-Control-Allow-Origin', req.headers.origin || '*');
 
         if (contentType.includes('text/html')) {
-          let html;
-          try {
-            html = await response.text();
-          } catch (textError) {
-            console.error(`Error reading response text: ${textError.message}`);
-            res.status(500).json({ error: `Error reading response: ${textError.message}` });
-            return;
-          }
-
-          // Check if the response is a search page (contains "Google Patents" search form)
+          let html = await response.text();
           if (html.includes('Google Patents') && html.includes('Search and read the full text of patents')) {
             console.log('Detected Google Patents search page, attempting PDF fallback');
-            // Extract the patent number from the URL
             const patentNumberMatch = targetUrl.match(/patent\/([A-Z0-9]+)/);
             if (patentNumberMatch) {
               const patentNumber = patentNumberMatch[1];
               const pdfUrl = `https://patentimages.storage.googleapis.com/pdfs/${patentNumber}.pdf`;
               console.log(`Fetching PDF fallback: ${pdfUrl}`);
-              try {
-                response = await fetch(pdfUrl, { headers: fetchHeaders });
-              } catch (pdfFetchError) {
-                console.error(`PDF fetch error: ${pdfFetchError.message}`);
-                res.status(500).json({ error: `Failed to fetch PDF: ${pdfFetchError.message}` });
-                return;
-              }
-
+              response = await fetch(pdfUrl, { headers: fetchHeaders });
               if (!response.ok) {
                 const pdfErrorText = await response.text();
                 console.error(`PDF fetch failed: ${response.status} - ${pdfErrorText}`);
                 res.status(response.status).json({ error: `Failed to fetch PDF: ${response.statusText}` });
                 return;
               }
-
-              const pdfContentType = response.headers.get('content-type') || 'application/pdf';
-              res.setHeader('Content-Type', pdfContentType);
+              res.setHeader('Content-Type', 'application/pdf');
               res.setHeader('Content-Disposition', 'inline');
               response.body.pipe(res);
               return;
@@ -131,18 +105,12 @@ module.exports = (req, res) => {
               return;
             }
           }
-
-          // Rewrite relative URLs to absolute URLs
-          html = html.replace(
-            /(href|src)="\/([^"]*)"/g,
-            `$1="https://patents.google.com/$2"`
-          );
+          html = html.replace(/(href|src)="\/([^"]*)"/g, `$1="https://patents.google.com/$2"`);
           res.setHeader('Content-Type', 'text/html');
           res.send(html);
           return;
         }
 
-        // Ensure non-HTML content is displayed inline
         res.setHeader('Content-Disposition', 'inline');
         response.body.pipe(res);
         return;
