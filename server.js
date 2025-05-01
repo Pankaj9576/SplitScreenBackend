@@ -53,6 +53,7 @@ app.get("/api/proxy", async (req, res) => {
     "Accept-Language": "en-US,en;q=0.5",
     Referer: "https://patents.google.com/",
     Connection: "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
   };
 
   try {
@@ -79,7 +80,72 @@ app.get("/api/proxy", async (req, res) => {
       // Add base tag to ensure relative URLs resolve correctly
       html = html.replace("<head>", `<head><base href="${baseUrl}/">`);
 
-      // Inject script to handle dynamic interactions (e.g., collapsible sections)
+      // Inject Google Fonts (Roboto) used by Google Patents
+      html = html.replace(
+        "<head>",
+        `<head>
+          <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap">
+        `
+      );
+
+      // Inject CSS to ensure consistent styling
+      html = html.replace(
+        "</head>",
+        `
+        <style>
+          body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', Arial, sans-serif;
+            color: #202124;
+            line-height: 1.6;
+          }
+          a {
+            color: #1a0dab;
+            text-decoration: none;
+          }
+          a:hover {
+            text-decoration: underline;
+          }
+          .patent-header {
+            font-size: 24px;
+            font-weight: 400;
+            margin-bottom: 10px;
+          }
+          .patent-info {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #dadce0;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            font-size: 14px;
+          }
+          .patent-abstract {
+            margin-bottom: 20px;
+            font-size: 14px;
+          }
+          .patent-images img {
+            max-width: 100%;
+            height: auto;
+            margin: 10px 0;
+          }
+          button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+          }
+          button:hover {
+            background: #3267d6;
+          }
+        </style>
+        </head>
+      `);
+
+      // Inject script to handle dynamic interactions
       html = html.replace(
         "</body>",
         `
