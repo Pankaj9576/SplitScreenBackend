@@ -73,9 +73,10 @@ app.get("/api/proxy", async (req, res) => {
       let html = await response.text();
       const baseUrl = new URL(targetUrl).origin;
 
-      // Rewrite all URLs to route through the proxy
-      html = html.replace(/(href|src)=(["'])(\/[^"']+)/g, `$1=$2${req.protocol}://${req.get("host")}/api/proxy?url=${encodeURIComponent(baseUrl)}$3`);
-      html = html.replace(/(href|src)=(["'])(https?:\/\/[^"']+)/g, `$1=$2${req.protocol}://${req.get("host")}/api/proxy?url=$3`);
+      // Force proxy URLs to use http instead of https
+      const proxyBaseUrl = `http://${req.get("host")}`;
+      html = html.replace(/(href|src)=(["'])(\/[^"']+)/g, `$1=$2${proxyBaseUrl}/api/proxy?url=${encodeURIComponent(baseUrl)}$3`);
+      html = html.replace(/(href|src)=(["'])(https?:\/\/[^"']+)/g, `$1=$2${proxyBaseUrl}/api/proxy?url=$3`);
 
       // Add base tag to ensure relative URLs resolve correctly
       html = html.replace("<head>", `<head><base href="${baseUrl}/">`);
