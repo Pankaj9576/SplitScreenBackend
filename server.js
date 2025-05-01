@@ -39,7 +39,7 @@ app.get("/api/proxy", async (req, res) => {
   }
 
   try {
-    new URL(targetUrl); // Validate URL
+    new URL(targetUrl);
   } catch (e) {
     return res.status(400).json({ error: "Invalid URL" });
   }
@@ -68,7 +68,6 @@ app.get("/api/proxy", async (req, res) => {
     res.setHeader("Content-Type", contentType);
     res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
 
-    // Handle HTML content and rewrite URLs for all resources
     if (contentType.includes("text/html")) {
       let html = await response.text();
       const baseUrl = new URL(targetUrl).origin;
@@ -77,9 +76,11 @@ app.get("/api/proxy", async (req, res) => {
       html = html.replace(/(href|src)=(["'])(?!https?:\/\/)(\/[^"']+)/g, `$1=$2${req.protocol}://${req.get("host")}/api/proxy?url=${encodeURIComponent(baseUrl)}$3`);
       html = html.replace(/(href|src)=(["'])(https?:\/\/[^"']+)/g, `$1=$2${req.protocol}://${req.get("host")}/api/proxy?url=$3`);
 
+      // Add base tag to ensure relative URLs resolve correctly
+      html = html.replace("<head>", `<head><base href="${baseUrl}/">`);
+
       res.send(html);
     } else {
-      // Stream non-HTML content (images, CSS, JS, PDFs, etc.)
       res.setHeader("Content-Disposition", "inline");
       response.body.pipe(res);
     }
