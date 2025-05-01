@@ -72,12 +72,28 @@ app.get("/api/proxy", async (req, res) => {
       let html = await response.text();
       const baseUrl = new URL(targetUrl).origin;
 
-      // Rewrite all href and src attributes to go through the proxy
-      html = html.replace(/(href|src)=(["'])(?!https?:\/\/)(\/[^"']+)/g, `$1=$2${req.protocol}://${req.get("host")}/api/proxy?url=${encodeURIComponent(baseUrl)}$3`);
+      // Rewrite all URLs to go through the proxy
+      html = html.replace(/(href|src)=(["'])(\/[^"']+)/g, `$1=$2${req.protocol}://${req.get("host")}/api/proxy?url=${encodeURIComponent(baseUrl)}$3`);
       html = html.replace(/(href|src)=(["'])(https?:\/\/[^"']+)/g, `$1=$2${req.protocol}://${req.get("host")}/api/proxy?url=$3`);
 
       // Add base tag to ensure relative URLs resolve correctly
       html = html.replace("<head>", `<head><base href="${baseUrl}/">`);
+
+      // Inject CSS to match Google Patents styling
+      html = html.replace(
+        "</head>",
+        `
+        <style>
+          body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+          #main { display: flex; flex-direction: column; align-items: center; padding: 20px; }
+          .patent-container { max-width: 1200px; width: 100%; }
+          .patent-header { font-size: 24px; margin-bottom: 10px; }
+          .patent-info { display: flex; justify-content: space-between; border-bottom: 1px solid #e0e0e0; padding-bottom: 10px; margin-bottom: 20px; }
+          .patent-abstract { margin-bottom: 20px; }
+          .patent-images img { max-width: 100%; height: auto; margin: 10px 0; }
+        </style>
+        </head>
+      `);
 
       res.send(html);
     } else {
