@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const fetch = require("node-fetch");
 const url = require("url");
+const cheerio = require("cheerio");
 
 const app = express();
 
@@ -38,10 +39,8 @@ app.get("/api/proxy", async (req, res) => {
     return res.status(400).json({ error: "URL parameter is required" });
   }
 
-  // Decode the target URL to prevent nested proxy URLs
   targetUrl = decodeURIComponent(targetUrl);
 
-  // Prevent recursive proxy calls
   if (targetUrl.includes("/api/proxy?url=")) {
     const urlMatch = targetUrl.match(/url=([^&]+)/);
     if (urlMatch) {
@@ -84,10 +83,334 @@ app.get("/api/proxy", async (req, res) => {
       let html = await response.text();
       const baseUrl = new URL(targetUrl).origin;
 
-      // Use HTTPS for proxy base URL
-      const proxyBaseUrl = `https://${req.get("host")}`;
+      if (targetUrl.includes("patents.google.com/patent")) {
+        const $ = cheerio.load(html);
 
-      // Rewrite URLs to use the proxy, but avoid double-encoding
+        // Extract images for the slider
+        const images = $('img[itemprop="thumbnail"]').map((i, el) => {
+          const src = $(el).attr('src');
+          return src ? (src.startsWith('http') ? src : `${baseUrl}${src}`) : null;
+        }).get().filter(Boolean);
+
+        // Inject CSS for the slider
+        html = html.replace(
+          "</head>",
+          `
+          <style>
+            body {
+              margin: 0;
+              padding: 0;
+              font-family: 'Roboto', Arial, sans-serif;
+              color: #202124;
+              line-height: 1.6;
+              background: #fff;
+            }
+            a {
+              color: #1a0dab;
+              text-decoration: none;
+            }
+            a:hover {
+              text-decoration: underline;
+            }
+            .style-scope.patent-result {
+              display: flex;
+              flex-direction: column;
+              max-width: 1280px;
+              margin: 0 auto;
+              padding: 16px;
+            }
+            .header.style-scope.patent-result {
+              font-family: 'Product Sans', 'Roboto', Arial, sans-serif;
+              font-size: 24px;
+              font-weight: 400;
+              margin-bottom: 16px;
+              color: #202124;
+            }
+            .layout.horizontal {
+              display: flex;
+              flex-direction: row;
+              gap: 32px;
+            }
+            .main-content {
+              flex: 3;
+              max-width: 70%;
+            }
+            .sidebar {
+              flex: 1;
+              max-width: 30%;
+              padding: 16px;
+              background: #f8f9fa;
+              border-radius: 8px;
+              font-size: 13px;
+            }
+            .abstract.style-scope.patent-result {
+              margin-bottom: 24px;
+              font-size: 14px;
+              color: #4d5156;
+            }
+            .image-slider {
+              position: relative;
+              width: 100%;
+              max-height: 400px;
+              overflow: hidden;
+              margin-bottom: 24px;
+              border-radius: 8px;
+              box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            }
+            .image-container {
+              display: flex;
+              transition: transform 0.5s ease-in-out;
+              width: 100%;
+              height: 100%;
+            }
+            .image-container img {
+              width: 100%;
+              max-height: 400px;
+              object-fit: contain;
+              flex-shrink: 0;
+              border-radius: 8px;
+              background: #f0f0f0;
+            }
+            .slider-nav {
+              position: absolute;
+              top: 50%;
+              transform: translateY(-50%);
+              background: rgba(0, 0, 0, 0.5);
+              color: white;
+              border: none;
+              padding: 10px;
+              cursor: pointer;
+              font-size: 18px;
+              border-radius: 50%;
+              transition: background 0.3s ease;
+            }
+            .slider-nav:hover {
+              background: rgba(0, 0, 0, 0.8);
+            }
+            .prev {
+              left: 10px;
+            }
+            .next {
+              right: 10px;
+            }
+            .classifications.style-scope.patent-result {
+              margin-bottom: 24px;
+            }
+            .classifications.style-scope.patent-result div {
+              font-size: 14px;
+              color: #4d5156;
+            }
+            .metadata.style-scope.patent-result {
+              font-size: 13px;
+              color: #4d5156;
+              margin-bottom: 16px;
+            }
+            .metadata.style-scope.patent-result div {
+              margin-bottom: 8px;
+            }
+            .metadata.style-scope.patent-result strong {
+              font-weight: 500;
+              color: #202124;
+            }
+            .action-buttons {
+              display: flex;
+              gap: 8px;
+              margin-bottom: 16px;
+            }
+            .action-buttons button {
+              background: #4285f4;
+              color: white;
+              border: none;
+              padding: 8px 16px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 14px;
+              font-family: 'Roboto', Arial, sans-serif;
+              transition: background 0.3s ease;
+            }
+            .action-buttons button:hover {
+              background: #3267d6;
+            }
+            .patent-header {
+              background: #1a73e8;
+              color: white;
+              padding: 8px 16px;
+              font-size: 16px;
+              font-family: 'Product Sans', 'Roboto', Arial, sans-serif;
+              margin-bottom: 8px;
+            }
+            .status-active {
+              color: #34a853;
+              font-weight: 500;
+            }
+            @media (max-width: 1024px) {
+              .layout.horizontal {
+                flex-direction: column;
+              }
+              .main-content, .sidebar {
+                max-width: 100%;
+              }
+              .image-slider {
+                max-height: 300px;
+              }
+              .image-container img {
+                max-height: 300px;
+              }
+            }
+            @media (max-width: 768px) {
+              .style-scope.patent-result {
+                padding: 12px;
+              }
+              .header.style-scope.patent-result {
+                font-size: 20px;
+              }
+              .image-slider {
+                max-height: 200px;
+              }
+              .image-container img {
+                max-height: 200px;
+              }
+            }
+          </style>
+          </head>
+        `
+        );
+
+        // Inject the image slider and JavaScript
+        html = html.replace(
+          "</body>",
+          `
+          <script>
+            window.addEventListener('message', function(e) {
+              if (e.data.type === 'linkClick') {
+                window.parent.postMessage({ type: 'linkClick', url: e.data.url }, '*');
+              }
+            });
+
+            document.addEventListener('click', function(e) {
+              if (e.target.tagName === 'A' && e.target.href) {
+                e.preventDefault();
+                window.parent.postMessage({
+                  type: 'linkClick',
+                  url: e.target.href
+                }, '*');
+              }
+            });
+
+            document.addEventListener('DOMContentLoaded', function() {
+              const patentResult = document.querySelector('patent-result');
+              if (patentResult) {
+                const mainContent = patentResult.querySelector('section');
+                const sidebar = patentResult.querySelector('#meta');
+                if (mainContent && sidebar) {
+                  mainContent.classList.add('main-content');
+                  sidebar.classList.add('sidebar');
+
+                  const layoutDiv = document.createElement('div');
+                  layoutDiv.className = 'layout horizontal';
+                  layoutDiv.appendChild(mainContent);
+                  layoutDiv.appendChild(sidebar);
+                  patentResult.insertBefore(layoutDiv, patentResult.firstChild);
+                }
+
+                // Add image slider
+                const imagesSection = document.querySelector('.images.style-scope.patent-result');
+                if (imagesSection) {
+                  imagesSection.innerHTML = '';
+                  const sliderDiv = document.createElement('div');
+                  sliderDiv.className = 'image-slider';
+                  const imageContainer = document.createElement('div');
+                  imageContainer.className = 'image-container';
+                  imageContainer.id = 'imageContainer';
+                  const imageUrls = ${JSON.stringify(images)};
+                  imageUrls.forEach(url => {
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.alt = 'Patent Image';
+                    imageContainer.appendChild(img);
+                  });
+                  sliderDiv.appendChild(imageContainer);
+                  if (imageUrls.length > 1) {
+                    const prevButton = document.createElement('button');
+                    prevButton.className = 'slider-nav prev';
+                    prevButton.textContent = '❮';
+                    prevButton.onclick = () => moveSlide(-1);
+                    sliderDiv.appendChild(prevButton);
+
+                    const nextButton = document.createElement('button');
+                    nextButton.className = 'slider-nav next';
+                    nextButton.textContent = '❯';
+                    nextButton.onclick = () => moveSlide(1);
+                    sliderDiv.appendChild(nextButton);
+                  }
+                  if (imageUrls.length === 0) {
+                    sliderDiv.innerHTML = '<p>No images available.</p>';
+                  }
+                  imagesSection.appendChild(sliderDiv);
+                }
+
+                const actionButtons = document.createElement('div');
+                actionButtons.className = 'action-buttons';
+
+                const downloadButton = document.createElement('button');
+                downloadButton.textContent = 'Download PDF';
+                downloadButton.onclick = () => {
+                  window.parent.postMessage({
+                    type: 'linkClick',
+                    url: '${targetUrl}/pdf'
+                  }, '*');
+                };
+                actionButtons.appendChild(downloadButton);
+
+                const priorArtButton = document.createElement('button');
+                priorArtButton.textContent = 'Find Prior Art';
+                priorArtButton.onclick = () => {
+                  window.parent.postMessage({
+                    type: 'linkClick',
+                    url: 'https://patents.google.com/xhr/query?url=pn%3D${targetUrl.split('/').pop()}%26priorart%3Dtrue'
+                  }, '*');
+                };
+                actionButtons.appendChild(priorArtButton);
+
+                const similarButton = document.createElement('button');
+                similarButton.textContent = 'Similar';
+                similarButton.onclick = () => {
+                  window.parent.postMessage({
+                    type: 'linkClick',
+                    url: 'https://patents.google.com/xhr/query?url=pn%3D${targetUrl.split('/').pop()}%26similar%3Dtrue'
+                  }, '*');
+                };
+                actionButtons.appendChild(similarButton);
+
+                sidebar.insertBefore(actionButtons, sidebar.firstChild);
+
+                const patentHeader = document.createElement('div');
+                patentHeader.className = 'patent-header';
+                patentHeader.textContent = '${targetUrl.split('/').pop()}';
+                sidebar.insertBefore(patentHeader, sidebar.firstChild);
+              }
+            });
+
+            let currentSlide = 0;
+            function moveSlide(direction) {
+              const slides = document.querySelectorAll('#imageContainer img');
+              const totalSlides = slides.length;
+              currentSlide += direction;
+              if (currentSlide < 0) {
+                currentSlide = totalSlides - 1;
+              } else if (currentSlide >= totalSlides) {
+                currentSlide = 0;
+              }
+              const offset = -currentSlide * 100;
+              document.querySelector('#imageContainer').style.transform = \`translateX(\${offset}%)\`;
+            }
+          </script>
+          </body>
+        `
+        );
+      }
+
+      const proxyBaseUrl = `https://${req.get("host")}`;
       html = html.replace(/(href|src)=(["'])(\/[^"']+)/g, `$1=$2${proxyBaseUrl}/api/proxy?url=${encodeURIComponent(baseUrl)}$3`);
       html = html.replace(/(href|src)=(["'])(https?:\/\/[^"']+)/g, (match, attr, quote, url) => {
         if (url.includes(proxyBaseUrl)) {
@@ -96,10 +419,8 @@ app.get("/api/proxy", async (req, res) => {
         return `${attr}=${quote}${proxyBaseUrl}/api/proxy?url=${encodeURIComponent(url)}`;
       });
 
-      // Add base tag to ensure relative URLs resolve correctly
       html = html.replace("<head>", `<head><base href="${baseUrl}/">`);
 
-      // Inject Google Fonts (Roboto and Product Sans)
       html = html.replace(
         "<head>",
         `<head>
@@ -107,210 +428,6 @@ app.get("/api/proxy", async (req, res) => {
           <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Product+Sans:400,700&display=swap">
         `
       );
-
-      // Inject CSS to match Google Patents' layout and styling
-      html = html.replace(
-        "</head>",
-        `
-        <style>
-          body {
-            margin: 0;
-            padding: 0;
-            font-family: 'Roboto', Arial, sans-serif;
-            color: #202124;
-            line-height: 1.6;
-            background: #fff;
-          }
-          a {
-            color: #1a0dab;
-            text-decoration: none;
-          }
-          a:hover {
-            text-decoration: underline;
-          }
-          .style-scope.patent-result {
-            display: flex;
-            flex-direction: column;
-            max-width: 1280px;
-            margin: 0 auto;
-            padding: 16px;
-          }
-          .header.style-scope.patent-result {
-            font-family: 'Product Sans', 'Roboto', Arial, sans-serif;
-            font-size: 24px;
-            font-weight: 400;
-            margin-bottom: 16px;
-            color: #202124;
-          }
-          .layout.horizontal {
-            display: flex;
-            flex-direction: row;
-            gap: 32px;
-          }
-          .main-content {
-            flex: 3;
-            max-width: 70%;
-          }
-          .sidebar {
-            flex: 1;
-            max-width: 30%;
-            padding: 16px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            font-size: 13px;
-          }
-          .abstract.style-scope.patent-result {
-            margin-bottom: 24px;
-            font-size: 14px;
-            color: #4d5156;
-          }
-          .images.style-scope.patent-result {
-            margin-bottom: 24px;
-          }
-          .images.style-scope.patent-result img {
-            max-width: 100%;
-            height: auto;
-            margin: 10px 0;
-          }
-          .classifications.style-scope.patent-result {
-            margin-bottom: 24px;
-          }
-          .classifications.style-scope.patent-result div {
-            font-size: 14px;
-            color: #4d5156;
-          }
-          .metadata.style-scope.patent-result {
-            font-size: 13px;
-            color: #4d5156;
-            margin-bottom: 16px;
-          }
-          .metadata.style-scope.patent-result div {
-            margin-bottom: 8px;
-          }
-          .metadata.style-scope.patent-result strong {
-            font-weight: 500;
-            color: #202124;
-          }
-          .action-buttons {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 16px;
-          }
-          .action-buttons button {
-            background: #4285f4;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-family: 'Roboto', Arial, sans-serif;
-            transition: background 0.3s ease;
-          }
-          .action-buttons button:hover {
-            background: #3267d6;
-          }
-          .patent-header {
-            background: #1a73e8;
-            color: white;
-            padding: 8px 16px;
-            font-size: 16px;
-            font-family: 'Product Sans', 'Roboto', Arial, sans-serif;
-            margin-bottom: 8px;
-          }
-          .status-active {
-            color: #34a853;
-            font-weight: 500;
-          }
-        </style>
-        </head>
-      `);
-
-      // Inject script to handle dynamic interactions and layout
-      html = html.replace(
-        "</body>",
-        `
-        <script>
-          window.addEventListener('message', function(e) {
-            if (e.data.type === 'linkClick') {
-              window.parent.postMessage({ type: 'linkClick', url: e.data.url }, '*');
-            }
-          });
-
-          document.addEventListener('click', function(e) {
-            if (e.target.tagName === 'A' && e.target.href) {
-              e.preventDefault();
-              window.parent.postMessage({
-                type: 'linkClick',
-                url: e.target.href
-              }, '*');
-            }
-          });
-
-          // Enhance layout and functionality
-          document.addEventListener('DOMContentLoaded', function() {
-            const patentResult = document.querySelector('patent-result');
-            if (patentResult) {
-              // Structure layout
-              const mainContent = patentResult.querySelector('section');
-              const sidebar = patentResult.querySelector('#meta');
-              if (mainContent && sidebar) {
-                mainContent.classList.add('main-content');
-                sidebar.classList.add('sidebar');
-
-                const layoutDiv = document.createElement('div');
-                layoutDiv.className = 'layout horizontal';
-                layoutDiv.appendChild(mainContent);
-                layoutDiv.appendChild(sidebar);
-                patentResult.insertBefore(layoutDiv, patentResult.firstChild);
-              }
-
-              // Add action buttons
-              const actionButtons = document.createElement('div');
-              actionButtons.className = 'action-buttons';
-
-              const downloadButton = document.createElement('button');
-              downloadButton.textContent = 'Download PDF';
-              downloadButton.onclick = () => {
-                window.parent.postMessage({
-                  type: 'linkClick',
-                  url: '${targetUrl}/pdf'
-                }, '*');
-              };
-              actionButtons.appendChild(downloadButton);
-
-              const priorArtButton = document.createElement('button');
-              priorArtButton.textContent = 'Find Prior Art';
-              priorArtButton.onclick = () => {
-                window.parent.postMessage({
-                  type: 'linkClick',
-                  url: 'https://patents.google.com/xhr/query?url=pn%3D${targetUrl.split('/').pop()}%26priorart%3Dtrue'
-                }, '*');
-              };
-              actionButtons.appendChild(priorArtButton);
-
-              const similarButton = document.createElement('button');
-              similarButton.textContent = 'Similar';
-              similarButton.onclick = () => {
-                window.parent.postMessage({
-                  type: 'linkClick',
-                  url: 'https://patents.google.com/xhr/query?url=pn%3D${targetUrl.split('/').pop()}%26similar%3Dtrue'
-                }, '*');
-              };
-              actionButtons.appendChild(similarButton);
-
-              sidebar.insertBefore(actionButtons, sidebar.firstChild);
-
-              // Add patent header
-              const patentHeader = document.createElement('div');
-              patentHeader.className = 'patent-header';
-              patentHeader.textContent = '${targetUrl.split('/').pop()}';
-              sidebar.insertBefore(patentHeader, sidebar.firstChild);
-            }
-          });
-        </script>
-        </body>
-      `);
 
       res.send(html);
     } else {
