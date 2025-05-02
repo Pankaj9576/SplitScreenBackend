@@ -39,10 +39,8 @@ app.get("/api/proxy", async (req, res) => {
     return res.status(400).json({ error: "URL parameter is required" });
   }
 
-  // Decode the target URL to prevent nested proxy URLs
   targetUrl = decodeURIComponent(targetUrl);
 
-  // Prevent recursive proxy calls
   if (targetUrl.includes("/api/proxy?url=")) {
     const urlMatch = targetUrl.match(/url=([^&]+)/);
     if (urlMatch) {
@@ -85,22 +83,30 @@ app.get("/api/proxy", async (req, res) => {
       let html = await response.text();
       const baseUrl = new URL(targetUrl).origin;
 
-      // Parse HTML with Cheerio if it's a Google Patents page
       if (targetUrl.includes("patents.google.com/patent")) {
         const $ = cheerio.load(html);
 
         // Extract key elements
         const patentNumber = $('h2#pubnum').text().trim() || targetUrl.split('/').pop();
-        const abstract = $('abstract').text().trim();
-        const inventor = $('dd[itemprop="inventor"]').map((i, el) => $(el).text().trim()).get().join(", ");
-        const assignee = $('dd[itemprop="assigneeCurrent"]').text().trim();
-        const applicationNumber = $('dd[itemprop="applicationNumber"]').text().trim();
-        const filingDate = $('time[itemprop="filingDate"]').text().trim();
-        const publicationDate = $('time[itemprop="publicationDate"]').text().trim();
-        const grantDate = $('time[itemprop="publicationDate"]').next('time').text().trim();
-        const status = $('span[itemprop="status"]').text().trim();
-        const priorityDate = $('time[itemprop="priorityDate"]').text().trim();
+        const title = $('h1#title').text().trim();
+        const abstract = $('abstract').text().trim() || "Abstract not available.";
+        const inventor = $('dd[itemprop="inventor"]').map((i, el) => $(el).text().trim()).get().join(", ") || "N/A";
+        const assignee = $('dd[itemprop="assigneeCurrent"]').text().trim() || "N/A";
+        const applicationNumber = $('dd[itemprop="applicationNumber"]').text().trim() || "N/A";
+        const filingDate = $('time[itemprop="filingDate"]').text().trim() || "N/A";
+        const publicationDate = $('time[itemprop="publicationDate"]').text().trim() || "N/A";
+        const grantDate = $('time[itemprop="publicationDate"]').next('time').text().trim() || "N/A";
+        const status = $('span[itemprop="status"]').text().trim() || "N/A";
+        const priorityDate = $('time[itemprop="priorityDate"]').text().trim() || "N/A";
         const images = $('img[itemprop="thumbnail"]').map((i, el) => $(el).attr('src')).get();
+        const classifications = $('[itemprop="classifications"] div').map((i, el) => $(el).text().trim()).get();
+        const description = $('section[itemprop="description"]').html() || "<p>Description not available.</p>";
+        const claims = $('section[itemprop="claims"]').html() || "<p>Claims not available.</p>";
+        const citations = $('tr[itemprop="backwardReferences"]').map((i, el) => {
+          const patent = $(el).find('td[itemprop="publicationNumber"]').text().trim();
+          const date = $(el).find('time[itemprop="publicationDate"]').text().trim();
+          return `<li>${patent} (${date})</li>`;
+        }).get().join('');
 
         // Build custom HTML structure to match Google Patents UI
         let customHtml = `
@@ -159,25 +165,45 @@ app.get("/api/proxy", async (req, res) => {
                 border-radius: 8px;
                 font-size: 13px;
               }
-              .abstract {
+              .section {
                 margin-bottom: 24px;
+              }
+              .section h2 {
+                font-family: 'Product Sans', 'Roboto', Arial, sans-serif;
+                font-size: 18px;
+                font-weight: 400;
+                color: #202124;
+                margin-bottom: 12px;
+              }
+              .abstract {
                 font-size: 14px;
                 color: #4d5156;
-              }
-              .images {
-                margin-bottom: 24px;
               }
               .images img {
                 max-width: 100%;
                 height: auto;
                 margin: 10px 0;
               }
-              .classifications {
-                margin-bottom: 24px;
-              }
               .classifications div {
                 font-size: 14px;
                 color: #4d5156;
+                margin-bottom: 8px;
+              }
+              .description, .claims {
+                font-size: 14px;
+                color: #4d5156;
+              }
+              .description p, .claims p {
+                margin-bottom: 12px;
+              }
+              .citations ul {
+                list-style: none;
+                padding: 0;
+                font-size: 14px;
+                color: #4d5156;
+              }
+              .citations li {
+                margin-bottom: 8px;
               }
               .metadata {
                 font-size: 13px;
@@ -226,21 +252,33 @@ app.get("/api/proxy", async (req, res) => {
           </head>
           <body>
             <div class="container">
-              <h1 class="header">Formation fluid sampling apparatus and methods</h1>
+              <h1 class="header">${title}</h1>
               <div class="layout">
                 <div class="main-content">
-                  <div class="abstract">
+                  <div class="section abstract">
                     <h2>Abstract</h2>
                     <p>${abstract}</p>
                   </div>
-                  <div class="images">
+                  <div class="section images">
                     <h2>Images (${images.length})</h2>
                     ${images.map(src => `<img src="${src}" alt="Patent Image">`).join('')}
                   </div>
-                  <div class="classifications">
+                  <div class="section classifications">
                     <h2>Classifications</h2>
-                    <div>E21B49/08 • Obtaining fluid samples or testing fluids, in boreholes or wells</div>
-                    <a href="#" onclick="window.parent.postMessage({type: 'linkClick', url: '${targetUrl}'}, '*')">View 1 more classification</a>
+                    ${classifications.map(cls => `<div>${cls}</div>`).join('')}
+                    <a href="#" onclick="window.parent.postMessage({type: 'linkClick', url: '${targetUrl}'}, '*')">View more classifications</a>
+                  </div>
+                  <div class="section description">
+                    <h2>Description</h2>
+                    ${description}
+                  </div>
+                  <div class="section claims">
+                    <h2>Claims</h2>
+                    ${claims}
+                  </div>
+                  <div class="section citations">
+                    <h2>Citations</h2>
+                    <ul>${citations || '<li>No citations available.</li>'}</ul>
                   </div>
                 </div>
                 <div class="sidebar">
@@ -268,7 +306,6 @@ app.get("/api/proxy", async (req, res) => {
         `;
         res.send(customHtml);
       } else {
-        // For non-patent URLs, use the previous proxy logic
         const proxyBaseUrl = `https://${req.get("host")}`;
         html = html.replace(/(href|src)=(["'])(\/[^"']+)/g, `$1=$2${proxyBaseUrl}/api/proxy?url=${encodeURIComponent(baseUrl)}$3`);
         html = html.replace(/(href|src)=(["'])(https?:\/\/[^"']+)/g, (match, attr, quote, url) => {

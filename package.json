@@ -18,6 +18,7 @@
     "express": "^4.21.2",
     "http-proxy-middleware": "^3.0.5",
     "mammoth": "^1.8.0",
+    "memory-cache": "^0.2.0",
     "multer": "^1.4.5-lts.1",
     "node-fetch": "^2.6.12",
     "papaparse": "^5.5.2",
