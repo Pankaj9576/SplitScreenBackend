@@ -86,26 +86,30 @@ app.get("/api/proxy", async (req, res) => {
       if (targetUrl.includes("patents.google.com/patent")) {
         const $ = cheerio.load(html);
 
-        // Extract key elements
-        const patentNumber = $('h2#pubnum').text().trim() || targetUrl.split('/').pop();
-        const title = $('h1#title').text().trim();
-        const abstract = $('abstract').text().trim() || "Abstract not available.";
+        // Extract key elements with improved selectors and fallbacks
+        const patentNumber = $('h2#pubnum').text().trim() || $('h3#pubnum').text().trim() || targetUrl.split('/').pop();
+        const title = $('h1#title').text().trim() || $('title').text().trim().replace(' - Google Patents', '') || "Patent Title Not Available";
+        const abstract = $('abstract').text().trim() || $('section[itemprop="abstract"]').text().trim() || "Abstract not available.";
         const inventor = $('dd[itemprop="inventor"]').map((i, el) => $(el).text().trim()).get().join(", ") || "N/A";
-        const assignee = $('dd[itemprop="assigneeCurrent"]').text().trim() || "N/A";
+        const assignee = $('dd[itemprop="assigneeCurrent"]').text().trim() || $('dd[itemprop="assignee"]').text().trim() || "N/A";
         const applicationNumber = $('dd[itemprop="applicationNumber"]').text().trim() || "N/A";
         const filingDate = $('time[itemprop="filingDate"]').text().trim() || "N/A";
         const publicationDate = $('time[itemprop="publicationDate"]').text().trim() || "N/A";
-        const grantDate = $('time[itemprop="publicationDate"]').next('time').text().trim() || "N/A";
+        const grantDate = $('time[itemprop="publicationDate"]').next('time').text().trim() || $('time[itemprop="grantDate"]').text().trim() || "N/A";
         const status = $('span[itemprop="status"]').text().trim() || "N/A";
         const priorityDate = $('time[itemprop="priorityDate"]').text().trim() || "N/A";
-        const images = $('img[itemprop="thumbnail"]').map((i, el) => $(el).attr('src')).get();
-        const classifications = $('[itemprop="classifications"] div').map((i, el) => $(el).text().trim()).get();
-        const description = $('section[itemprop="description"]').html() || "<p>Description not available.</p>";
-        const claims = $('section[itemprop="claims"]').html() || "<p>Claims not available.</p>";
+        const images = $('img[itemprop="thumbnail"]').map((i, el) => {
+          const src = $(el).attr('src');
+          return src ? (src.startsWith('http') ? src : `${baseUrl}${src}`) : null;
+        }).get().filter(Boolean);
+        const classifications = $('[itemprop="classifications"] div, [itemprop="classifications"] span').map((i, el) => $(el).text().trim()).get().filter(text => text);
+        const description = $('section[itemprop="description"]').html() || $('div.description').html() || "<p>Description not available.</p>";
+        const claims = $('section[itemprop="claims"]').html() || $('div.claims').html() || "<p>Claims not available.</p>";
         const citations = $('tr[itemprop="backwardReferences"]').map((i, el) => {
           const patent = $(el).find('td[itemprop="publicationNumber"]').text().trim();
           const date = $(el).find('time[itemprop="publicationDate"]').text().trim();
-          return `<li>${patent} (${date})</li>`;
+          const link = $(el).find('a').attr('href') || '#';
+          return `<li><a href="${link}" onclick="window.parent.postMessage({type: 'linkClick', url: '${link}'}, '*'); return false;">${patent} (${date})</a></li>`;
         }).get().join('');
 
         // Build custom HTML structure with enhanced design
@@ -202,6 +206,7 @@ app.get("/api/proxy", async (req, res) => {
               .image-slider {
                 position: relative;
                 width: 100%;
+                max-height: 400px; /* Limit the height of the slider */
                 overflow: hidden;
                 border-radius: 8px;
                 box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -209,12 +214,16 @@ app.get("/api/proxy", async (req, res) => {
               .image-container {
                 display: flex;
                 transition: transform 0.5s ease-in-out;
+                width: 100%;
+                height: 100%;
               }
               .image-container img {
                 width: 100%;
-                height: auto;
+                max-height: 400px; /* Limit image height */
+                object-fit: contain; /* Ensure image fits without distortion */
                 flex-shrink: 0;
                 border-radius: 8px;
+                background: #f0f0f0; /* Background for images with transparency */
               }
               .slider-nav {
                 position: absolute;
@@ -332,6 +341,42 @@ app.get("/api/proxy", async (req, res) => {
                 border-radius: 12px;
                 display: inline-block;
               }
+              /* Responsive Design */
+              @media (max-width: 1024px) {
+                .layout {
+                  flex-direction: column;
+                }
+                .main-content, .sidebar {
+                  max-width: 100%;
+                }
+                .image-slider {
+                  max-height: 300px;
+                }
+                .image-container img {
+                  max-height: 300px;
+                }
+              }
+              @media (max-width: 768px) {
+                .container {
+                  padding: 16px;
+                }
+                .header {
+                  font-size: 24px;
+                }
+                .section h2 {
+                  font-size: 18px;
+                }
+                .action-buttons button {
+                  padding: 8px 16px;
+                  font-size: 13px;
+                }
+                .image-slider {
+                  max-height: 200px;
+                }
+                .image-container img {
+                  max-height: 200px;
+                }
+              }
             </style>
           </head>
           <body>
@@ -346,15 +391,17 @@ app.get("/api/proxy", async (req, res) => {
                   <div class="section image-slider">
                     <h2>Images (${images.length})</h2>
                     <div class="image-container" id="imageContainer">
-                      ${images.map(src => `<img src="${src}" alt="Patent Image">`).join('')}
+                      ${images.length > 0 ? images.map(src => `<img src="${src}" alt="Patent Image">`).join('') : '<p>No images available.</p>'}
                     </div>
-                    <button class="slider-nav prev" onclick="moveSlide(-1)">&#10094;</button>
-                    <button class="slider-nav next" onclick="moveSlide(1)">&#10095;</button>
+                    ${images.length > 1 ? `
+                      <button class="slider-nav prev" onclick="moveSlide(-1)">❮</button>
+                      <button class="slider-nav next" onclick="moveSlide(1)">❯</button>
+                    ` : ''}
                   </div>
                   <div class="section classifications">
                     <h2>Classifications</h2>
-                    ${classifications.map(cls => `<div>${cls}</div>`).join('')}
-                    <a href="#" onclick="window.parent.postMessage({type: 'linkClick', url: '${targetUrl}'}, '*')">View more classifications</a>
+                    ${classifications.length > 0 ? classifications.map(cls => `<div>${cls}</div>`).join('') : '<p>No classifications available.</p>'}
+                    <a href="${targetUrl}" onclick="window.parent.postMessage({type: 'linkClick', url: '${targetUrl}'}, '*'); return false;">View more classifications</a>
                   </div>
                   <div class="section description">
                     <h2>Description</h2>
@@ -406,8 +453,10 @@ app.get("/api/proxy", async (req, res) => {
               }
 
               if (totalSlides <= 1) {
-                document.querySelector('.prev').style.display = 'none';
-                document.querySelector('.next').style.display = 'none';
+                const prevButton = document.querySelector('.prev');
+                const nextButton = document.querySelector('.next');
+                if (prevButton) prevButton.style.display = 'none';
+                if (nextButton) nextButton.style.display = 'none';
               }
             </script>
           </body>
