@@ -7,7 +7,7 @@ const app = express();
 
 const corsMiddleware = cors({
   origin: (origin, callback) => {
-    const allowedOrigins = ["https://projectbayslope.vercel.app", "http://localhost:3000"];
+    const allowedOrigins = ["https://frontendsplitscreen.vercel.app", "http://localhost:3000"];
     console.log(`CORS origin check - Origin: ${origin}`);
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
@@ -33,9 +33,20 @@ app.options("*", (req, res) => {
 });
 
 app.get("/api/proxy", async (req, res) => {
-  const targetUrl = req.query.url;
+  let targetUrl = req.query.url;
   if (!targetUrl) {
     return res.status(400).json({ error: "URL parameter is required" });
+  }
+
+  // Decode the target URL to prevent nested proxy URLs
+  targetUrl = decodeURIComponent(targetUrl);
+
+  // Prevent recursive proxy calls by checking if the URL is already a proxy URL
+  if (targetUrl.includes("/api/proxy?url=")) {
+    const urlMatch = targetUrl.match(/url=([^&]+)/);
+    if (urlMatch) {
+      targetUrl = decodeURIComponent(urlMatch[1]);
+    }
   }
 
   try {
@@ -73,10 +84,21 @@ app.get("/api/proxy", async (req, res) => {
       let html = await response.text();
       const baseUrl = new URL(targetUrl).origin;
 
-      // Use the request's protocol (http or https) dynamically
-      const proxyBaseUrl = `${req.protocol}://${req.get("host")}`;
+      // Use HTTPS for proxy base URL
+      const proxyBaseUrl = `https://${req.get("host")}`;
+      
+      // Convert all HTTP resources to HTTPS
+      html = html.replace(/(href|src)="http:/g, `$1="https:`);
+
+      // Rewrite URLs to use the proxy, but avoid double-encoding
       html = html.replace(/(href|src)=(["'])(\/[^"']+)/g, `$1=$2${proxyBaseUrl}/api/proxy?url=${encodeURIComponent(baseUrl)}$3`);
-      html = html.replace(/(href|src)=(["'])(https?:\/\/[^"']+)/g, `$1=$2${proxyBaseUrl}/api/proxy?url=$3`);
+      html = html.replace(/(href|src)=(["'])(https?:\/\/[^"']+)/g, (match, attr, quote, url) => {
+        // Avoid rewriting URLs that are already proxied
+        if (url.includes(proxyBaseUrl)) {
+          return match;
+        }
+        return `${attr}=${quote}${proxyBaseUrl}/api/proxy?url=${encodeURIComponent(url)}`;
+      });
 
       // Add base tag to ensure relative URLs resolve correctly
       html = html.replace("<head>", `<head><base href="${baseUrl}/">`);
