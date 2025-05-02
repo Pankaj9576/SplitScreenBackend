@@ -41,7 +41,7 @@ app.get("/api/proxy", async (req, res) => {
   // Decode the target URL to prevent nested proxy URLs
   targetUrl = decodeURIComponent(targetUrl);
 
-  // Prevent recursive proxy calls by checking if the URL is already a proxy URL
+  // Prevent recursive proxy calls
   if (targetUrl.includes("/api/proxy?url=")) {
     const urlMatch = targetUrl.match(/url=([^&]+)/);
     if (urlMatch) {
@@ -86,14 +86,10 @@ app.get("/api/proxy", async (req, res) => {
 
       // Use HTTPS for proxy base URL
       const proxyBaseUrl = `https://${req.get("host")}`;
-      
-      // Convert all HTTP resources to HTTPS
-      html = html.replace(/(href|src)="http:/g, `$1="https:`);
 
       // Rewrite URLs to use the proxy, but avoid double-encoding
       html = html.replace(/(href|src)=(["'])(\/[^"']+)/g, `$1=$2${proxyBaseUrl}/api/proxy?url=${encodeURIComponent(baseUrl)}$3`);
       html = html.replace(/(href|src)=(["'])(https?:\/\/[^"']+)/g, (match, attr, quote, url) => {
-        // Avoid rewriting URLs that are already proxied
         if (url.includes(proxyBaseUrl)) {
           return match;
         }
@@ -103,7 +99,7 @@ app.get("/api/proxy", async (req, res) => {
       // Add base tag to ensure relative URLs resolve correctly
       html = html.replace("<head>", `<head><base href="${baseUrl}/">`);
 
-      // Inject Google Fonts (Roboto and Product Sans) used by Google Patents
+      // Inject Google Fonts (Roboto and Product Sans)
       html = html.replace(
         "<head>",
         `<head>
@@ -168,24 +164,20 @@ app.get("/api/proxy", async (req, res) => {
             font-size: 14px;
             color: #4d5156;
           }
+          .images.style-scope.patent-result {
+            margin-bottom: 24px;
+          }
           .images.style-scope.patent-result img {
             max-width: 100%;
             height: auto;
             margin: 10px 0;
           }
-          button.style-scope.patent-result {
-            background: #4285f4;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-family: 'Roboto', Arial, sans-serif;
-            margin-right: 8px;
+          .classifications.style-scope.patent-result {
+            margin-bottom: 24px;
           }
-          button.style-scope.patent-result:hover {
-            background: #3267d6;
+          .classifications.style-scope.patent-result div {
+            font-size: 14px;
+            color: #4d5156;
           }
           .metadata.style-scope.patent-result {
             font-size: 13px;
@@ -199,11 +191,42 @@ app.get("/api/proxy", async (req, res) => {
             font-weight: 500;
             color: #202124;
           }
+          .action-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+          }
+          .action-buttons button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-family: 'Roboto', Arial, sans-serif;
+            transition: background 0.3s ease;
+          }
+          .action-buttons button:hover {
+            background: #3267d6;
+          }
+          .patent-header {
+            background: #1a73e8;
+            color: white;
+            padding: 8px 16px;
+            font-size: 16px;
+            font-family: 'Product Sans', 'Roboto', Arial, sans-serif;
+            margin-bottom: 8px;
+          }
+          .status-active {
+            color: #34a853;
+            font-weight: 500;
+          }
         </style>
         </head>
       `);
 
-      // Inject script to handle dynamic interactions and ensure layout
+      // Inject script to handle dynamic interactions and layout
       html = html.replace(
         "</body>",
         `
@@ -224,21 +247,65 @@ app.get("/api/proxy", async (req, res) => {
             }
           });
 
-          // Ensure sidebar and main content layout
+          // Enhance layout and functionality
           document.addEventListener('DOMContentLoaded', function() {
             const patentResult = document.querySelector('patent-result');
             if (patentResult) {
+              // Structure layout
               const mainContent = patentResult.querySelector('section');
               const sidebar = patentResult.querySelector('#meta');
               if (mainContent && sidebar) {
                 mainContent.classList.add('main-content');
                 sidebar.classList.add('sidebar');
+
                 const layoutDiv = document.createElement('div');
                 layoutDiv.className = 'layout horizontal';
                 layoutDiv.appendChild(mainContent);
                 layoutDiv.appendChild(sidebar);
                 patentResult.insertBefore(layoutDiv, patentResult.firstChild);
               }
+
+              // Add action buttons
+              const actionButtons = document.createElement('div');
+              actionButtons.className = 'action-buttons';
+
+              const downloadButton = document.createElement('button');
+              downloadButton.textContent = 'Download PDF';
+              downloadButton.onclick = () => {
+                window.parent.postMessage({
+                  type: 'linkClick',
+                  url: '${targetUrl}/pdf'
+                }, '*');
+              };
+              actionButtons.appendChild(downloadButton);
+
+              const priorArtButton = document.createElement('button');
+              priorArtButton.textContent = 'Find Prior Art';
+              priorArtButton.onclick = () => {
+                window.parent.postMessage({
+                  type: 'linkClick',
+                  url: 'https://patents.google.com/xhr/query?url=pn%3D${targetUrl.split('/').pop()}%26priorart%3Dtrue'
+                }, '*');
+              };
+              actionButtons.appendChild(priorArtButton);
+
+              const similarButton = document.createElement('button');
+              similarButton.textContent = 'Similar';
+              similarButton.onclick = () => {
+                window.parent.postMessage({
+                  type: 'linkClick',
+                  url: 'https://patents.google.com/xhr/query?url=pn%3D${targetUrl.split('/').pop()}%26similar%3Dtrue'
+                }, '*');
+              };
+              actionButtons.appendChild(similarButton);
+
+              sidebar.insertBefore(actionButtons, sidebar.firstChild);
+
+              // Add patent header
+              const patentHeader = document.createElement('div');
+              patentHeader.className = 'patent-header';
+              patentHeader.textContent = '${targetUrl.split('/').pop()}';
+              sidebar.insertBefore(patentHeader, sidebar.firstChild);
             }
           });
         </script>
