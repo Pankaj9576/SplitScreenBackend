@@ -9,85 +9,36 @@
     {
       "src": "/api/signup",
       "methods": ["POST", "OPTIONS"],
-      "dest": "server.js",
-      "headers": {
-        "Access-Control-Allow-Origin": "https://frontendsplitscreen.vercel.app",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400"
-      }
+      "dest": "server.js"
     },
     {
       "src": "/api/login",
       "methods": ["POST", "OPTIONS"],
-      "dest": "server.js",
-      "headers": {
-        "Access-Control-Allow-Origin": "https://frontendsplitscreen.vercel.app",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400"
-      }
+      "dest": "server.js"
     },
     {
       "src": "/api/google-login",
       "methods": ["POST", "OPTIONS"],
-      "dest": "server.js",
-      "headers": {
-        "Access-Control-Allow-Origin": "https://frontendsplitscreen.vercel.app",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400"
-      }
+      "dest": "server.js"
     },
     {
       "src": "/api/verify-token",
       "methods": ["POST", "OPTIONS"],
-      "dest": "server.js",
-      "headers": {
-        "Access-Control-Allow-Origin": "https://frontendsplitscreen.vercel.app",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400"
-      }
+      "dest": "server.js"
     },
     {
       "src": "/api/proxy",
       "methods": ["GET", "OPTIONS"],
-      "dest": "server.js",
-      "headers": {
-        "Access-Control-Allow-Origin": "https://frontendsplitscreen.vercel.app",
-        "Access-Control-Allow-Methods": "GET, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400"
-      }
+      "dest": "server.js"
     },
     {
       "src": "/api/upload",
       "methods": ["POST", "OPTIONS"],
-      "dest": "server.js",
-      "headers": {
-        "Access-Control-Allow-Origin": "https://frontendsplitscreen.vercel.app",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400"
-      }
+      "dest": "server.js"
     },
     {
       "src": "/(.*)",
-      "dest": "server.js",
-      "headers": {
-        "Access-Control-Allow-Origin": "https://frontendsplitscreen.vercel.app",
-        "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization",
-        "Access-Control-Allow-Credentials": "true",
-        "Access-Control-Max-Age": "86400"
-      }
+      "dest": "server.js"
     }
   ]
 }

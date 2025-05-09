@@ -48,7 +48,7 @@ app.use((req, res, next) => {
   // Handle OPTIONS preflight request
   if (req.method === "OPTIONS") {
     console.log(`CORS: Handling OPTIONS preflight request for ${req.path}`);
-    return res.status(200).end(); // Ensure 200 OK for OPTIONS
+    return res.status(200).end();
   }
 
   next();
@@ -80,6 +80,11 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "OK", message: "Server is running" });
+});
+
 // Signup endpoint
 app.post("/api/signup", async (req, res) => {
   console.log("Signup: Request received:", req.body);
@@ -106,7 +111,7 @@ app.post("/api/signup", async (req, res) => {
     res.status(200).json({ token, message: "Signup successful" });
   } catch (error) {
     console.error("Signup: Error:", error.message);
-    res.status(500).json({ error: "Server error during signup" });
+    res.status(500).json({ error: "Server error during signup", details: error.message });
   }
 });
 
@@ -138,7 +143,7 @@ app.post("/api/login", async (req, res) => {
     res.status(200).json({ token, message: "Login successful" });
   } catch (error) {
     console.error("Login: Error:", error.message);
-    res.status(500).json({ error: "Server error during login" });
+    res.status(500).json({ error: "Server error during login", details: error.message });
   }
 });
 
@@ -165,7 +170,7 @@ app.post("/api/google-login", async (req, res) => {
     res.status(200).json({ token, message: "Google login successful" });
   } catch (error) {
     console.error("Google Login: Error:", error.message);
-    res.status(500).json({ error: "Server error during Google login" });
+    res.status(500).json({ error: "Server error during Google login", details: error.message });
   }
 });
 
