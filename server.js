@@ -1,5 +1,4 @@
 const express = require("express");
-const cors = require("cors");
 const fetch = require("node-fetch");
 const url = require("url");
 const cheerio = require("cheerio");
@@ -8,28 +7,36 @@ const bcrypt = require("bcryptjs");
 
 const app = express();
 
-// CORS middleware setup
+// CORS middleware to handle all requests
 app.use((req, res, next) => {
   const allowedOrigins = ["https://frontendsplitscreen.vercel.app", "http://localhost:3000"];
   const origin = req.headers.origin;
-  
+
+  // Log the origin for debugging
+  console.log(`Request Origin: ${origin}`);
+
+  // Set CORS headers for allowed origins
   if (allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
+  } else {
+    console.warn(`Origin not allowed: ${origin}`);
   }
-  
+
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Max-Age", "86400");
 
-  // Handle preflight requests
+  // Handle preflight OPTIONS requests
   if (req.method === "OPTIONS") {
+    console.log("Handling OPTIONS preflight request");
     return res.status(204).end();
   }
 
   next();
 });
 
+// Ensure JSON parsing for POST requests
 app.use(express.json());
 
 // In-memory user storage (replace with a database in production)
@@ -55,44 +62,69 @@ const authenticateToken = (req, res, next) => {
 
 // Signup endpoint
 app.post("/api/signup", async (req, res) => {
+  console.log("Signup request received:", req.body);
   const { email, password } = req.body;
-  const existingUser = users.find(u => u.email === email);
+  
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
 
+  const existingUser = users.find(u => u.email === email);
   if (existingUser) {
     return res.status(400).json({ error: "User already exists" });
   }
 
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const user = { email, password: hashedPassword };
-  users.push(user);
+  try {
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = { email, password: hashedPassword };
+    users.push(user);
 
-  const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
-  res.json({ token });
+    const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+    res.json({ token });
+  } catch (error) {
+    console.error("Signup error:", error);
+    res.status(500).json({ error: "Server error during signup" });
+  }
 });
 
 // Login endpoint
 app.post("/api/login", async (req, res) => {
+  console.log("Login request received:", req.body);
   const { email, password } = req.body;
-  const user = users.find(u => u.email === email);
 
+  if (!email || !password) {
+    return res.status(400).json({ error: "Email and password are required" });
+  }
+
+  const user = users.find(u => u.email === email);
   if (!user) {
     return res.status(400).json({ error: "User not found" });
   }
 
-  const isMatch = await bcrypt.compare(password, user.password);
-  if (!isMatch) {
-    return res.status(400).json({ error: "Invalid password" });
-  }
+  try {
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ error: "Invalid password" });
+    }
 
-  const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
-  res.json({ token });
+    const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+    res.json({ token });
+  } catch (error) {
+    console.error("Login error:", error);
+    res.status(500).json({ error: "Server error during login" });
+  }
 });
 
 // Google login endpoint
 app.post("/api/google-login", (req, res) => {
+  console.log("Google login request received:", req.body);
   const { email, googleId } = req.body;
-  let user = users.find(u => u.email === email);
+  
+  if (!email || !googleId) {
+    return res.status(400).json({ error: "Email and Google ID are required" });
+  }
 
+  let user = users.find(u => u.email === email);
   if (!user) {
     user = { email, googleId };
     users.push(user);
@@ -107,7 +139,7 @@ app.post("/api/verify-token", authenticateToken, (req, res) => {
   res.json({ valid: true });
 });
 
-// Existing proxy endpoint with authentication
+// Proxy endpoint with authentication
 app.get("/api/proxy", authenticateToken, async (req, res) => {
   let targetUrl = req.query.url;
   if (!targetUrl) {
@@ -403,7 +435,7 @@ app.get("/api/proxy", authenticateToken, async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Proxy server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
 
 module.exports = app;
