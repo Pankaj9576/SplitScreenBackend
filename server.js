@@ -8,36 +8,26 @@ const bcrypt = require("bcryptjs");
 
 const app = express();
 
-// CORS configuration
-const corsMiddleware = cors({
-  origin: (origin, callback) => {
-    const allowedOrigins = ["https://frontendsplitscreen.vercel.app", "http://localhost:3000"];
-    console.log(`CORS origin check - Origin: ${origin}`);
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`CORS warning - Origin not allowed: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true,
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
-});
+// CORS middleware setup
+app.use((req, res, next) => {
+  const allowedOrigins = ["https://frontendsplitscreen.vercel.app", "http://localhost:3000"];
+  const origin = req.headers.origin;
+  
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+  }
+  
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  res.setHeader("Access-Control-Max-Age", "86400");
 
-app.use(corsMiddleware);
+  // Handle preflight requests
+  if (req.method === "OPTIONS") {
+    return res.status(204).end();
+  }
 
-// Handle preflight requests explicitly
-app.options("*", corsMiddleware, (req, res) => {
-  res
-    .status(204)
-    .setHeader("Access-Control-Allow-Origin", req.headers.origin || "*")
-    .setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    .setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
-    .setHeader("Access-Control-Max-Age", "86400")
-    .end();
+  next();
 });
 
 app.use(express.json());
@@ -162,7 +152,6 @@ app.get("/api/proxy", authenticateToken, async (req, res) => {
 
     const contentType = response.headers.get("content-type") || "application/octet-stream";
     res.setHeader("Content-Type", contentType);
-    res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
 
     if (contentType.includes("text/html")) {
       let html = await response.text();
