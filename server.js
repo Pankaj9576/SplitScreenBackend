@@ -2,9 +2,9 @@ const express = require("express");
 const fetch = require("node-fetch");
 const url = require("url");
 const cheerio = require("cheerio");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-const mongoose = require("mongoose");
+// const jwt = require("jsonwebtoken");
+// const bcrypt = require("bcryptjs");
+// const mongoose = require("mongoose");
 const cors = require("cors");
 
 const app = express();
@@ -24,152 +24,153 @@ app.use((req, res, next) => {
   next();
 });
 
-// Connect to MongoDB Atlas
-mongoose.connect(process.env.MONGODB_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true,
-})
-  .then(() => console.log("MongoDB Atlas connected successfully"))
-  .catch(err => console.error("MongoDB Atlas connection error:", err));
+// // Connect to MongoDB Atlas
+// mongoose.connect(process.env.MONGODB_URI, {
+//   useNewUrlParser: true,
+//   useUnifiedTopology: true,
+// })
+//   .then(() => console.log("MongoDB Atlas connected successfully"))
+//   .catch(err => console.error("MongoDB Atlas connection error:", err));
 
-// Define User schema
-const userSchema = new mongoose.Schema({
-  email: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  googleId: { type: String },
-});
+// // Define User schema
+// const userSchema = new mongoose.Schema({
+//   email: { type: String, required: true, unique: true },
+//   password: { type: String, required: true },
+//   googleId: { type: String },
+// });
 
-const User = mongoose.model("User", userSchema);
+// const User = mongoose.model("User", userSchema);
 
 app.use(express.json());
 
-// Load JWT secret from environment variable
-const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
+// // Load JWT secret from environment variable
+// const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
-// Middleware to verify JWT token
-const authenticateToken = (req, res, next) => {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+// // Middleware to verify JWT token
+// const authenticateToken = (req, res, next) => {
+//   const authHeader = req.headers['authorization'];
+//   const token = authHeader && authHeader.split(' ')[1];
 
-  if (!token) {
-    console.log("Auth: No token provided");
-    return res.status(401).json({ error: "Authentication required" });
-  }
+//   if (!token) {
+//     console.log("Auth: No token provided");
+//     return res.status(401).json({ error: "Authentication required" });
+//   }
 
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    console.log("Auth: Token verified, user:", decoded.email);
-    next();
-  } catch (err) {
-    console.log("Auth: Invalid token");
-    return res.status(403).json({ error: "Invalid or expired token" });
-  }
-};
+//   try {
+//     const decoded = jwt.verify(token, JWT_SECRET);
+//     req.user = decoded;
+//     console.log("Auth: Token verified, user:", decoded.email);
+//     next();
+//   } catch (err) {
+//     console.log("Auth: Invalid token");
+//     return res.status(403).json({ error: "Invalid or expired token" });
+//   }
+// };
 
 // Health check endpoint
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "OK", message: "Server is running" });
 });
 
-// Signup endpoint
-app.post("/api/signup", async (req, res) => {
-  console.log("Signup: Request received:", req.body);
-  const { email, password } = req.body;
+// // Signup endpoint
+// app.post("/api/signup", async (req, res) => {
+//   console.log("Signup: Request received:", req.body);
+//   const { email, password } = req.body;
 
-  if (!email || !password) {
-    console.log("Signup: Missing email or password");
-    return res.status(400).json({ error: "Email and password are required" });
-  }
+//   if (!email || !password) {
+//     console.log("Signup: Missing email or password");
+//     return res.status(400).json({ error: "Email and password are required" });
+//   }
 
-  try {
-    const existingUser = await User.findOne({ email });
-    if (existingUser) {
-      console.log("Signup: User already exists");
-      return res.status(400).json({ error: "User already exists" });
-    }
+//   try {
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       console.log("Signup: User already exists");
+//       return res.status(400).json({ error: "User already exists" });
+//     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = new User({ email, password: hashedPassword });
-    await user.save();
+//     const hashedPassword = await bcrypt.hash(password, 10);
+//     const user = new User({ email, password: hashedPassword });
+//     await user.save();
 
-    const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
-    console.log("Signup: Success, token generated");
-    res.status(200).json({ token, message: "Signup successful" });
-  } catch (error) {
-    console.error("Signup: Error:", error.message);
-    res.status(500).json({ error: "Server error during signup", details: error.message });
-  }
-});
+//     const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+//     console.log("Signup: Success, token generated");
+//     res.status(200).json({ token, message: "Signup successful" });
+//   } catch (error) {
+//     console.error("Signup: Error:", error.message);
+//     res.status(500).json({ error: "Server error during signup", details: error.message });
+//   }
+// });
 
-// Login endpoint
-app.post("/api/login", async (req, res) => {
-  console.log("Login: Request received:", req.body);
-  const { email, password } = req.body;
+// // Login endpoint
+// app.post("/api/login", async (req, res) => {
+//   console.log("Login: Request received:", req.body);
+//   const { email, password } = req.body;
 
-  if (!email || !password) {
-    console.log("Login: Missing email or password");
-    return res.status(400).json({ error: "Email and password are required" });
-  }
+//   if (!email || !password) {
+//     console.log("Login: Missing email or password");
+//     return res.status(400).json({ error: "Email and password are required" });
+//   }
 
-  try {
-    const user = await User.findOne({ email });
-    if (!user) {
-      console.log("Login: User not found");
-      return res.status(400).json({ error: "User not found" });
-    }
+//   try {
+//     const user = await User.findOne({ email });
+//     if (!user) {
+//       console.log("Login: User not found");
+//       return res.status(400).json({ error: "User not found" });
+//     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
-      console.log("Login: Invalid password");
-      return res.status(400).json({ error: "Invalid password" });
-    }
+//     const isMatch = await bcrypt.compare(password, user.password);
+//     if (!isMatch) {
+//       console.log("Login: Invalid password");
+//       return res.status(400).json({ error: "Invalid password" });
+//     }
 
-    const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
-    console.log("Login: Success, token generated");
-    res.status(200).json({ token, message: "Login successful" });
-  } catch (error) {
-    console.error("Login: Error:", error.message);
-    res.status(500).json({ error: "Server error during login", details: error.message });
-  }
-});
+//     const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+//     console.log("Login: Success, token generated");
+//     res.status(200).json({ token, message: "Login successful" });
+//   } catch (error) {
+//     console.error("Login: Error:", error.message);
+//     res.status(500).json({ error: "Server error during login", details: error.message });
+//   }
+// });
 
-// Google login endpoint
-app.post("/api/google-login", async (req, res) => {
-  console.log("Google Login: Request received:", req.body);
-  const { email, googleId } = req.body;
+// // Google login endpoint
+// app.post("/api/google-login", async (req, res) => {
+//   console.log("Google Login: Request received:", req.body);
+//   const { email, googleId } = req.body;
 
-  if (!email || !googleId) {
-    console.log("Google Login: Missing email or googleId");
-    return res.status(400).json({ error: "Email and Google ID are required" });
-  }
+//   if (!email || !googleId) {
+//     console.log("Google Login: Missing email or googleId");
+//     return res.status(400).json({ error: "Email and Google ID are required" });
+//   }
 
-  try {
-    let user = await User.findOne({ email });
-    if (!user) {
-      user = new User({ email, googleId });
-      await user.save();
-      console.log("Google Login: New user created");
-    }
+//   try {
+//     let user = await User.findOne({ email });
+//     if (!user) {
+//       user = new User({ email, googleId });
+//       await user.save();
+//       console.log("Google Login: New user created");
+//     }
 
-    const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
-    console.log("Google Login: Success, token generated");
-    res.status(200).json({ token, message: "Google login successful" });
-  } catch (error) {
-    console.error("Google Login: Error:", error.message);
-    res.status(500).json({ error: "Server error during Google login", details: error.message });
-  }
-});
+//     const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+//     console.log("Google Login: Success, token generated");
+//     res.status(200).json({ token, message: "Google login successful" });
+//   } catch (error) {
+//     console.error("Google Login: Error:", error.message);
+//     res.status(500).json({ error: "Server error during Google login", details: error.message });
+//   }
+// });
 
-// Token verification endpoint
-app.post("/api/verify-token", authenticateToken, (req, res) => {
-  console.log("Verify Token: Request received, user:", req.user.email);
-  res.status(200).json({ valid: true, email: req.user.email });
-});
+// // Token verification endpoint
+// app.post("/api/verify-token", authenticateToken, (req, res) => {
+//   console.log("Verify Token: Request received, user:", req.user.email);
+//   res.status(200).json({ valid: true, email: req.user.email });
+// });
 
-// Proxy endpoint with authentication
-app.get("/api/proxy", authenticateToken, async (req, res) => {
-  console.log("Proxy: Request received, user:", req.user.email);
+// Proxy endpoint with authentication (removing authentication for now)
+// app.get("/api/proxy", authenticateToken, async (req, res) => {
+app.get("/api/proxy", async (req, res) => {
+  console.log("Proxy: Request received");
   let targetUrl = req.query.url;
   if (!targetUrl) {
     console.log("Proxy: URL parameter missing");
@@ -465,4 +466,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-module.exports = app;//heloo
+module.exports = app;
