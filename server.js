@@ -7,19 +7,20 @@ const bcrypt = require("bcryptjs");
 
 const app = express();
 
-// CORS middleware to handle all requests
+// Middleware to set CORS headers for all requests
 app.use((req, res, next) => {
   const allowedOrigins = ["https://frontendsplitscreen.vercel.app", "http://localhost:3000"];
   const origin = req.headers.origin;
 
-  // Log the origin for debugging
-  console.log(`Request Origin: ${origin}`);
+  // Log the request origin and method
+  console.log(`Request - Method: ${req.method}, Origin: ${origin}, Path: ${req.path}`);
 
-  // Set CORS headers for allowed origins
+  // Set CORS headers
   if (allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
+    console.log(`CORS: Allowing origin - ${origin}`);
   } else {
-    console.warn(`Origin not allowed: ${origin}`);
+    console.warn(`CORS: Origin not allowed - ${origin}`);
   }
 
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -29,7 +30,7 @@ app.use((req, res, next) => {
 
   // Handle preflight OPTIONS requests
   if (req.method === "OPTIONS") {
-    console.log("Handling OPTIONS preflight request");
+    console.log(`CORS: Handling OPTIONS preflight request for ${req.path}`);
     return res.status(204).end();
   }
 
@@ -48,11 +49,13 @@ const authenticateToken = (req, res, next) => {
   const token = authHeader && authHeader.split(' ')[1];
 
   if (!token) {
+    console.log("Auth: No token provided");
     return res.status(401).json({ error: 'Authentication required' });
   }
 
   jwt.verify(token, 'your_jwt_secret', (err, user) => {
     if (err) {
+      console.log("Auth: Invalid token");
       return res.status(403).json({ error: 'Invalid token' });
     }
     req.user = user;
@@ -62,15 +65,17 @@ const authenticateToken = (req, res, next) => {
 
 // Signup endpoint
 app.post("/api/signup", async (req, res) => {
-  console.log("Signup request received:", req.body);
+  console.log("Signup: Request received:", req.body);
   const { email, password } = req.body;
-  
+
   if (!email || !password) {
+    console.log("Signup: Missing email or password");
     return res.status(400).json({ error: "Email and password are required" });
   }
 
   const existingUser = users.find(u => u.email === email);
   if (existingUser) {
+    console.log("Signup: User already exists");
     return res.status(400).json({ error: "User already exists" });
   }
 
@@ -80,47 +85,53 @@ app.post("/api/signup", async (req, res) => {
     users.push(user);
 
     const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+    console.log("Signup: Success, token generated");
     res.json({ token });
   } catch (error) {
-    console.error("Signup error:", error);
+    console.error("Signup: Error:", error.message);
     res.status(500).json({ error: "Server error during signup" });
   }
 });
 
 // Login endpoint
 app.post("/api/login", async (req, res) => {
-  console.log("Login request received:", req.body);
+  console.log("Login: Request received:", req.body);
   const { email, password } = req.body;
 
   if (!email || !password) {
+    console.log("Login: Missing email or password");
     return res.status(400).json({ error: "Email and password are required" });
   }
 
   const user = users.find(u => u.email === email);
   if (!user) {
+    console.log("Login: User not found");
     return res.status(400).json({ error: "User not found" });
   }
 
   try {
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
+      console.log("Login: Invalid password");
       return res.status(400).json({ error: "Invalid password" });
     }
 
     const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+    console.log("Login: Success, token generated");
     res.json({ token });
   } catch (error) {
-    console.error("Login error:", error);
+    console.error("Login: Error:", error.message);
     res.status(500).json({ error: "Server error during login" });
   }
 });
 
 // Google login endpoint
 app.post("/api/google-login", (req, res) => {
-  console.log("Google login request received:", req.body);
+  console.log("Google Login: Request received:", req.body);
   const { email, googleId } = req.body;
-  
+
   if (!email || !googleId) {
+    console.log("Google Login: Missing email or googleId");
     return res.status(400).json({ error: "Email and Google ID are required" });
   }
 
@@ -128,21 +139,26 @@ app.post("/api/google-login", (req, res) => {
   if (!user) {
     user = { email, googleId };
     users.push(user);
+    console.log("Google Login: New user created");
   }
 
   const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+  console.log("Google Login: Success, token generated");
   res.json({ token });
 });
 
 // Token verification endpoint
 app.post("/api/verify-token", authenticateToken, (req, res) => {
+  console.log("Verify Token: Request received");
   res.json({ valid: true });
 });
 
 // Proxy endpoint with authentication
 app.get("/api/proxy", authenticateToken, async (req, res) => {
+  console.log("Proxy: Request received");
   let targetUrl = req.query.url;
   if (!targetUrl) {
+    console.log("Proxy: URL parameter missing");
     return res.status(400).json({ error: "URL parameter is required" });
   }
 
@@ -158,10 +174,11 @@ app.get("/api/proxy", authenticateToken, async (req, res) => {
   try {
     new URL(targetUrl);
   } catch (e) {
+    console.log("Proxy: Invalid URL");
     return res.status(400).json({ error: "Invalid URL" });
   }
 
-  console.log(`Proxy GET request for URL: ${targetUrl}`);
+  console.log(`Proxy: Fetching URL - ${targetUrl}`);
 
   const fetchHeaders = {
     "User-Agent":
@@ -178,7 +195,7 @@ app.get("/api/proxy", authenticateToken, async (req, res) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`Fetch failed: ${response.status} - ${errorText}`);
+      console.error(`Proxy: Fetch failed - ${response.status} - ${errorText}`);
       return res.status(response.status).json({ error: `Failed to fetch URL: ${response.statusText}` });
     }
 
@@ -428,7 +445,7 @@ app.get("/api/proxy", authenticateToken, async (req, res) => {
       response.body.pipe(res);
     }
   } catch (error) {
-    console.error("Proxy error:", error.message);
+    console.error("Proxy: Error:", error.message);
     res.status(500).json({ error: `Server error: ${error.message}` });
   }
 });
