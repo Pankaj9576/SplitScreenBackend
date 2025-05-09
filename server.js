@@ -3,6 +3,8 @@ const cors = require("cors");
 const fetch = require("node-fetch");
 const url = require("url");
 const cheerio = require("cheerio");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 
 const app = express();
 
@@ -18,22 +20,99 @@ const corsMiddleware = cors({
     }
   },
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"],
+  allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
 });
 
 app.use(corsMiddleware);
+app.use(express.json());
 
 app.options("*", (req, res) => {
   res
     .status(200)
     .setHeader("Access-Control-Allow-Origin", req.headers.origin || "*")
     .setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-    .setHeader("Access-Control-Allow-Headers", "Content-Type")
+    .setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
     .end();
 });
 
-app.get("/api/proxy", async (req, res) => {
+// In-memory user storage (replace with a database in production)
+const users = [];
+
+// Middleware to verify JWT token
+const authenticateToken = (req, res, next) => {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+
+  if (!token) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  jwt.verify(token, 'your_jwt_secret', (err, user) => {
+    if (err) {
+      return res.status(403).json({ error: 'Invalid token' });
+    }
+    req.user = user;
+    next();
+  });
+};
+
+// Login endpoint
+app.post("/api/login", async (req, res) => {
+  const { email, password } = req.body;
+  const user = users.find(u => u.email === email);
+
+  if (!user) {
+    return res.status(400).json({ error: "User not found" });
+  }
+
+  const isMatch = await bcrypt.compare(password, user.password);
+  if (!isMatch) {
+    return res.status(400).json({ error: "Invalid password" });
+  }
+
+  const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+  res.json({ token });
+});
+
+// Google login endpoint
+app.post("/api/google-login", (req, res) => {
+  const { email, googleId } = req.body;
+  let user = users.find(u => u.email === email);
+
+  if (!user) {
+    user = { email, googleId };
+    users.push(user);
+  }
+
+  const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+  res.json({ token });
+});
+
+// Signup endpoint
+app.post("/api/signup", async (req, res) => {
+  const { email, password } = req.body;
+  const existingUser = users.find(u => u.email === email);
+
+  if (existingUser) {
+    return res.status(400).json({ error: "User already exists" });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = { email, password: hashedPassword };
+  users.push(user);
+
+  const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+  res.json({ token });
+});
+
+// Token verification endpoint
+app.post("/api/verify-token", authenticateToken, (req, res) => {
+  res.json({ valid: true });
+});
+
+// Existing proxy endpoint with authentication
+app.get("/api/proxy", authenticateToken, async (req, res) => {
   let targetUrl = req.query.url;
   if (!targetUrl) {
     return res.status(400).json({ error: "URL parameter is required" });
@@ -332,4 +411,4 @@ app.listen(PORT, () => {
   console.log(`Proxy server running on port ${PORT}`);
 });
 
-module.exports = app;//Hello
+module.exports = app;
