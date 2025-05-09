@@ -5,8 +5,24 @@ const cheerio = require("cheerio");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
+const cors = require("cors");
 
 const app = express();
+
+// Configure CORS middleware
+app.use(cors({
+  origin: ["https://frontendsplitscreen.vercel.app", "http://localhost:3000"],
+  methods: ["GET", "POST", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+  maxAge: 86400,
+}));
+
+// Log all incoming requests
+app.use((req, res, next) => {
+  console.log(`Request - Method: ${req.method}, Origin: ${req.headers.origin}, Path: ${req.path}`);
+  next();
+});
 
 // Connect to MongoDB Atlas
 mongoose.connect(process.env.MONGODB_URI, {
@@ -24,35 +40,6 @@ const userSchema = new mongoose.Schema({
 });
 
 const User = mongoose.model("User", userSchema);
-
-// Middleware to set CORS headers for all requests
-app.use((req, res, next) => {
-  const allowedOrigins = ["https://frontendsplitscreen.vercel.app", "http://localhost:3000"];
-  const origin = req.headers.origin;
-
-  console.log(`Request - Method: ${req.method}, Origin: ${origin}, Path: ${req.path}`);
-
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-    console.log(`CORS: Allowing origin - ${origin}`);
-  } else {
-    console.warn(`CORS: Origin not allowed - ${origin}`);
-    return res.status(403).json({ error: "Origin not allowed" });
-  }
-
-  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader("Access-Control-Max-Age", "86400");
-
-  // Handle OPTIONS preflight request
-  if (req.method === "OPTIONS") {
-    console.log(`CORS: Handling OPTIONS preflight request for ${req.path}`);
-    return res.status(200).end();
-  }
-
-  next();
-});
 
 app.use(express.json());
 
