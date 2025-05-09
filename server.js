@@ -4,18 +4,34 @@ const url = require("url");
 const cheerio = require("cheerio");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const mongoose = require("mongoose");
 
 const app = express();
+
+// Connect to MongoDB Atlas
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+  .then(() => console.log("MongoDB Atlas connected successfully"))
+  .catch(err => console.error("MongoDB Atlas connection error:", err));
+
+// Define User schema
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  googleId: { type: String },
+});
+
+const User = mongoose.model("User", userSchema);
 
 // Middleware to set CORS headers for all requests
 app.use((req, res, next) => {
   const allowedOrigins = ["https://frontendsplitscreen.vercel.app", "http://localhost:3000"];
   const origin = req.headers.origin;
 
-  // Log the request origin and method
   console.log(`Request - Method: ${req.method}, Origin: ${origin}, Path: ${req.path}`);
 
-  // Set CORS headers
   if (allowedOrigins.includes(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     console.log(`CORS: Allowing origin - ${origin}`);
@@ -28,7 +44,6 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Max-Age", "86400");
 
-  // Handle preflight OPTIONS requests
   if (req.method === "OPTIONS") {
     console.log(`CORS: Handling OPTIONS preflight request for ${req.path}`);
     return res.status(204).end();
@@ -37,11 +52,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Ensure JSON parsing for POST requests
 app.use(express.json());
 
-// In-memory user storage (replace with a database in production)
-const users = [];
+// Load JWT secret from environment variable
+const JWT_SECRET = process.env.JWT_SECRET || "your_jwt_secret";
 
 // Middleware to verify JWT token
 const authenticateToken = (req, res, next) => {
@@ -50,17 +64,18 @@ const authenticateToken = (req, res, next) => {
 
   if (!token) {
     console.log("Auth: No token provided");
-    return res.status(401).json({ error: 'Authentication required' });
+    return res.status(401).json({ error: "Authentication required" });
   }
 
-  jwt.verify(token, 'your_jwt_secret', (err, user) => {
-    if (err) {
-      console.log("Auth: Invalid token");
-      return res.status(403).json({ error: 'Invalid token' });
-    }
-    req.user = user;
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
+    console.log("Auth: Token verified, user:", decoded.email);
     next();
-  });
+  } catch (err) {
+    console.log("Auth: Invalid token");
+    return res.status(403).json({ error: "Invalid or expired token" });
+  }
 };
 
 // Signup endpoint
@@ -73,20 +88,20 @@ app.post("/api/signup", async (req, res) => {
     return res.status(400).json({ error: "Email and password are required" });
   }
 
-  const existingUser = users.find(u => u.email === email);
-  if (existingUser) {
-    console.log("Signup: User already exists");
-    return res.status(400).json({ error: "User already exists" });
-  }
-
   try {
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const user = { email, password: hashedPassword };
-    users.push(user);
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      console.log("Signup: User already exists");
+      return res.status(400).json({ error: "User already exists" });
+    }
 
-    const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({ email, password: hashedPassword });
+    await user.save();
+
+    const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
     console.log("Signup: Success, token generated");
-    res.json({ token });
+    res.json({ token, message: "Signup successful" });
   } catch (error) {
     console.error("Signup: Error:", error.message);
     res.status(500).json({ error: "Server error during signup" });
@@ -103,22 +118,22 @@ app.post("/api/login", async (req, res) => {
     return res.status(400).json({ error: "Email and password are required" });
   }
 
-  const user = users.find(u => u.email === email);
-  if (!user) {
-    console.log("Login: User not found");
-    return res.status(400).json({ error: "User not found" });
-  }
-
   try {
+    const user = await User.findOne({ email });
+    if (!user) {
+      console.log("Login: User not found");
+      return res.status(400).json({ error: "User not found" });
+    }
+
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       console.log("Login: Invalid password");
       return res.status(400).json({ error: "Invalid password" });
     }
 
-    const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+    const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
     console.log("Login: Success, token generated");
-    res.json({ token });
+    res.json({ token, message: "Login successful" });
   } catch (error) {
     console.error("Login: Error:", error.message);
     res.status(500).json({ error: "Server error during login" });
@@ -126,7 +141,7 @@ app.post("/api/login", async (req, res) => {
 });
 
 // Google login endpoint
-app.post("/api/google-login", (req, res) => {
+app.post("/api/google-login", async (req, res) => {
   console.log("Google Login: Request received:", req.body);
   const { email, googleId } = req.body;
 
@@ -135,27 +150,32 @@ app.post("/api/google-login", (req, res) => {
     return res.status(400).json({ error: "Email and Google ID are required" });
   }
 
-  let user = users.find(u => u.email === email);
-  if (!user) {
-    user = { email, googleId };
-    users.push(user);
-    console.log("Google Login: New user created");
-  }
+  try {
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = new User({ email, googleId });
+      await user.save();
+      console.log("Google Login: New user created");
+    }
 
-  const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
-  console.log("Google Login: Success, token generated");
-  res.json({ token });
+    const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
+    console.log("Google Login: Success, token generated");
+    res.json({ token, message: "Google login successful" });
+  } catch (error) {
+    console.error("Google Login: Error:", error.message);
+    res.status(500).json({ error: "Server error during Google login" });
+  }
 });
 
 // Token verification endpoint
 app.post("/api/verify-token", authenticateToken, (req, res) => {
-  console.log("Verify Token: Request received");
-  res.json({ valid: true });
+  console.log("Verify Token: Request received, user:", req.user.email);
+  res.json({ valid: true, email: req.user.email });
 });
 
 // Proxy endpoint with authentication
 app.get("/api/proxy", authenticateToken, async (req, res) => {
-  console.log("Proxy: Request received");
+  console.log("Proxy: Request received, user:", req.user.email);
   let targetUrl = req.query.url;
   if (!targetUrl) {
     console.log("Proxy: URL parameter missing");
@@ -209,13 +229,11 @@ app.get("/api/proxy", authenticateToken, async (req, res) => {
       if (targetUrl.includes("patents.google.com/patent")) {
         const $ = cheerio.load(html);
 
-        // Extract images for the slider
         const images = $('img[itemprop="thumbnail"]').map((i, el) => {
           const src = $(el).attr('src');
           return src ? (src.startsWith('http') ? src : `${baseUrl}${src}`) : null;
         }).get().filter(Boolean);
 
-        // Inject CSS for the slider
         html = html.replace(
           "</head>",
           `
@@ -286,7 +304,6 @@ app.get("/api/proxy", authenticateToken, async (req, res) => {
         `
         );
 
-        // Inject the image slider and JavaScript
         html = html.replace(
           "</body>",
           `
@@ -323,7 +340,6 @@ app.get("/api/proxy", authenticateToken, async (req, res) => {
                   patentResult.insertBefore(layoutDiv, patentResult.firstChild);
                 }
 
-                // Replace images section with slider
                 const imagesSection = document.querySelector('.images.style-scope.patent-result');
                 if (imagesSection) {
                   imagesSection.innerHTML = '';
