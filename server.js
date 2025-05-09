@@ -8,6 +8,7 @@ const bcrypt = require("bcryptjs");
 
 const app = express();
 
+// CORS configuration
 const corsMiddleware = cors({
   origin: (origin, callback) => {
     const allowedOrigins = ["https://frontendsplitscreen.vercel.app", "http://localhost:3000"];
@@ -16,25 +17,30 @@ const corsMiddleware = cors({
       callback(null, true);
     } else {
       console.warn(`CORS warning - Origin not allowed: ${origin}`);
-      callback(null, false);
+      callback(new Error('Not allowed by CORS'));
     }
   },
   methods: ["GET", "POST", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 });
 
 app.use(corsMiddleware);
-app.use(express.json());
 
-app.options("*", (req, res) => {
+// Handle preflight requests explicitly
+app.options("*", corsMiddleware, (req, res) => {
   res
-    .status(200)
+    .status(204)
     .setHeader("Access-Control-Allow-Origin", req.headers.origin || "*")
     .setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
     .setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization")
+    .setHeader("Access-Control-Max-Age", "86400")
     .end();
 });
+
+app.use(express.json());
 
 // In-memory user storage (replace with a database in production)
 const users = [];
@@ -56,6 +62,23 @@ const authenticateToken = (req, res, next) => {
     next();
   });
 };
+
+// Signup endpoint
+app.post("/api/signup", async (req, res) => {
+  const { email, password } = req.body;
+  const existingUser = users.find(u => u.email === email);
+
+  if (existingUser) {
+    return res.status(400).json({ error: "User already exists" });
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const user = { email, password: hashedPassword };
+  users.push(user);
+
+  const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
+  res.json({ token });
+});
 
 // Login endpoint
 app.post("/api/login", async (req, res) => {
@@ -84,23 +107,6 @@ app.post("/api/google-login", (req, res) => {
     user = { email, googleId };
     users.push(user);
   }
-
-  const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
-  res.json({ token });
-});
-
-// Signup endpoint
-app.post("/api/signup", async (req, res) => {
-  const { email, password } = req.body;
-  const existingUser = users.find(u => u.email === email);
-
-  if (existingUser) {
-    return res.status(400).json({ error: "User already exists" });
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-  const user = { email, password: hashedPassword };
-  users.push(user);
 
   const token = jwt.sign({ email: user.email }, 'your_jwt_secret', { expiresIn: '1h' });
   res.json({ token });
