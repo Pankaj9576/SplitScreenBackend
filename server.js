@@ -37,6 +37,7 @@ app.use((req, res, next) => {
     console.log(`CORS: Allowing origin - ${origin}`);
   } else {
     console.warn(`CORS: Origin not allowed - ${origin}`);
+    return res.status(403).json({ error: "Origin not allowed" });
   }
 
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -44,9 +45,10 @@ app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Credentials", "true");
   res.setHeader("Access-Control-Max-Age", "86400");
 
+  // Handle OPTIONS preflight request
   if (req.method === "OPTIONS") {
     console.log(`CORS: Handling OPTIONS preflight request for ${req.path}`);
-    return res.status(204).end();
+    return res.status(200).end(); // Ensure 200 OK for OPTIONS
   }
 
   next();
@@ -101,7 +103,7 @@ app.post("/api/signup", async (req, res) => {
 
     const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
     console.log("Signup: Success, token generated");
-    res.json({ token, message: "Signup successful" });
+    res.status(200).json({ token, message: "Signup successful" });
   } catch (error) {
     console.error("Signup: Error:", error.message);
     res.status(500).json({ error: "Server error during signup" });
@@ -133,7 +135,7 @@ app.post("/api/login", async (req, res) => {
 
     const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
     console.log("Login: Success, token generated");
-    res.json({ token, message: "Login successful" });
+    res.status(200).json({ token, message: "Login successful" });
   } catch (error) {
     console.error("Login: Error:", error.message);
     res.status(500).json({ error: "Server error during login" });
@@ -160,7 +162,7 @@ app.post("/api/google-login", async (req, res) => {
 
     const token = jwt.sign({ email: user.email }, JWT_SECRET, { expiresIn: '1h' });
     console.log("Google Login: Success, token generated");
-    res.json({ token, message: "Google login successful" });
+    res.status(200).json({ token, message: "Google login successful" });
   } catch (error) {
     console.error("Google Login: Error:", error.message);
     res.status(500).json({ error: "Server error during Google login" });
@@ -170,7 +172,7 @@ app.post("/api/google-login", async (req, res) => {
 // Token verification endpoint
 app.post("/api/verify-token", authenticateToken, (req, res) => {
   console.log("Verify Token: Request received, user:", req.user.email);
-  res.json({ valid: true, email: req.user.email });
+  res.status(200).json({ valid: true, email: req.user.email });
 });
 
 // Proxy endpoint with authentication
