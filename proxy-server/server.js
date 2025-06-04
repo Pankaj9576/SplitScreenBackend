@@ -17,7 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 // CORS middleware setup
 app.use(
   cors({
-    origin: ['https://frontendsplitscreen.vercel.app', 'http://localhost:3000'],
+    origin: ['https://frontendsplitscreen.vercel.app', 'http://localhost:3000','https://split-screen-inky.vercel.app'],
     methods: ['GET', 'POST', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
